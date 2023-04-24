@@ -66,6 +66,7 @@ class run_PEM_clusters:
     ):
         # nomen
         self.cluster_cap_mw = np.round(system_size_mw / num_clusters)
+        
         # capacity of each cluster, must be a multiple of 1 MW
         self.num_clusters = num_clusters
         self.user_params = (
@@ -90,6 +91,7 @@ class run_PEM_clusters:
         self.T = len(self.input_power_kw)
         self.farm_power = 1e9
         self.switching_cost = 12
+        #cluster_size_list=self.size_clusters(system_size_mw,num_clusters)
 
     def run_grid_connected_pem(self,system_size_mw,hydrogen_production_capacity_required_kgphr):
         pem=PEMClusters(
@@ -113,7 +115,8 @@ class run_PEM_clusters:
 
     def run(self, optimize=False):
         # TODO: add control type as input!
-        clusters = self.create_clusters()  # initialize clusters
+        c_size=self.cluster_cap_mw*np.ones(self.num_clusters)#added
+        clusters = self.create_clusters(c_size)  # initialize clusters
         if optimize:
             power_to_clusters = self.optimize_power_split()  # run Sanjana's code
         else:
@@ -266,17 +269,31 @@ class run_PEM_clusters:
     def min_deg_cntrl(self):
         # run as few as possible
         []
+    def size_clusters(self,system_size_mw,num_clusters):
+        num_equal_sized_clusters=np.floor(num_clusters)
+        equal_sized_cluster_capacity = system_size_mw//num_equal_sized_clusters
+        equal_sized_tot_capacity = num_equal_sized_clusters*equal_sized_cluster_capacity
+        remaining_capacity = system_size_mw - equal_sized_tot_capacity
+        
+        equal_cluster_size_list=equal_sized_cluster_capacity*np.ones(num_equal_sized_clusters)
+        if remaining_capacity==0:
+            cluster_sizes = equal_cluster_size_list
+        else:
+            cluster_sizes = np.concatenate([equal_cluster_size_list,remaining_capacity*np.ones(1)])
+        return cluster_sizes
 
-    def create_clusters(self):
+
+
+
+    def create_clusters(self,cluster_sizes):
         start = time.perf_counter()
         stacks = []
-        # TODO fix the power input - don't make it required!
-        # in_dict={'dt':3600}
-        for i in range(self.num_clusters):
-            # stacks.append(PEMClusters(cluster_size_mw = self.cluster_cap_mw))
+        for cluster_cap_mw in cluster_sizes:
+        #for i in range(self.num_clusters):
             stacks.append(
                 PEMClusters(
-                    self.cluster_cap_mw,
+                    cluster_cap_mw,
+                    #self.cluster_cap_mw,
                     self.plant_life_yrs,
                     *self.user_params,
                     self.use_deg_penalty,

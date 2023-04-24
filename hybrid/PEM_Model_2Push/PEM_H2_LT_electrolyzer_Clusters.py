@@ -92,7 +92,7 @@ class PEM_H2_Clusters:
         # self.stack_input_current_lower_bound = 400 #[A] any current below this amount (10% rated) will saturate the H2 production to zero, used to be 500 (12.5% of rated)
         self.stack_rating_kW = 1000  # 1 MW
         self.cell_active_area = 1920#1250 #[cm^2]
-        self.N_cells = 130
+        self.N_cells = 130 #change to 127 so at rated the current density is 2A/cm^2
         self.membrane_thickness=0.018 #cm
         self.cell_max_current_density = 2 #[A/cm^2]
         self.max_cell_current=self.cell_max_current_density*self.cell_active_area #PEM electrolyzers have a max current density of approx 2 A/cm^2 so max current is 2*cell_area
@@ -342,11 +342,12 @@ class PEM_H2_Clusters:
         stack_lived_hrs=[]
         #init_voltage_df=self.output_dict['Cumulative Degradation Breakdown'].copy(deep=True)
         degraded_voltage_signal,Vdeg_signal=self.full_degradation(cell_voltage_signal)
-        deg_df=pd.concat([deg_df,self.output_dict['Cumulative Degradation Breakdown']])
+        # deg_df=pd.concat([deg_df,self.output_dict['Cumulative Degradation Breakdown']])
         stack_died,next_stack_will_die,hour_of_death,V_tot,Vdeg=self.check_aliveness(Vdeg_signal,cell_voltage_signal)
         if stack_died:
             # n_stackrep_per_sim +=1
             # stack_lived_hrs.append(hour_of_death)
+            deg_df=pd.concat([deg_df,self.output_dict['Cumulative Degradation Breakdown']])
             if next_stack_will_die:
 
                 while next_stack_will_die:
@@ -367,6 +368,7 @@ class PEM_H2_Clusters:
             Vdeg_final = Vdeg
 
         else:
+            deg_df=pd.concat([deg_df,self.output_dict['Cumulative Degradation Breakdown']])
             Vdeg_final=Vdeg_signal
             V_tot_final=degraded_voltage_signal
         
