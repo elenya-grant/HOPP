@@ -106,9 +106,12 @@ def run_profast_for_hydrogen(hopp_dict,electrolyzer_size_mw,H2_Results,\
     fixed_cost_electrolysis_total = fixed_OM*electrolyzer_size_mw*1000
     property_tax_insurance = 1.5/100    #[% of Cap/y]
     variable_OM = 1.30  #[$/MWh]
-
-    electrolysis_total_EI_policy_grid,electrolysis_total_EI_policy_offgrid\
-          = LCA_single_scenario_ProFAST.hydrogen_LCA_singlescenario_ProFAST(grid_connection_scenario,atb_year,site_name,policy_option,hydrogen_production_while_running,H2_Results,electrolyzer_energy_kWh_per_kg,solar_size_mw,storage_size_mw,hopp_dict)
+    if grid_connection_scenario == 'off-grid':
+        electrolysis_total_EI_policy_grid=0
+        electrolysis_total_EI_policy_offgrid=0
+    else:
+        electrolysis_total_EI_policy_grid,electrolysis_total_EI_policy_offgrid\
+            = LCA_single_scenario_ProFAST.hydrogen_LCA_singlescenario_ProFAST(grid_connection_scenario,atb_year,site_name,policy_option,hydrogen_production_while_running,H2_Results,electrolyzer_energy_kWh_per_kg,solar_size_mw,storage_size_mw,hopp_dict)
     
     grid_electricity_useage_kWhpkg = sum(hopp_dict.main_dict['Models']['grid']['ouput_dict']['energy_from_the_grid'])/(H2_Results['hydrogen_annual_output']) 
     ren_electricity_useage_kWhpkg = sum(hopp_dict.main_dict['Models']['grid']['ouput_dict']['energy_from_renewables'])/(H2_Results['hydrogen_annual_output']) 
