@@ -260,7 +260,7 @@ class run_PEM_clusters:
 
         return np.transpose(power_to_clusters)
 
-    def max_h2_cntrl(self):
+    def smart_control(self):
         # run as many at lower power as possible
         []
 

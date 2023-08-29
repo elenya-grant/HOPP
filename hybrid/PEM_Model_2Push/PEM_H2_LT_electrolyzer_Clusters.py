@@ -227,8 +227,8 @@ class PEM_H2_Clusters:
         h2_results_aggregates['Total Off-Cycles'] = np.sum(self.off_cycle_cnt)
         h2_results_aggregates['Final Degradation [V]'] =self.cumulative_Vdeg_per_hr_sys[-1]
         # h2_results_aggregates['IV curve coeff'] = self.curve_coeff
-        h2_results_aggregates['Life'] = lifetime_performance_df
-        h2_results_aggregates['Stack Life Summary'] = self.stack_life_opt
+        h2_results_aggregates.update(lifetime_performance_df.to_dict()) 
+        # h2_results_aggregates['Stack Life Summary'] = self.stack_life_opt
 
         h2_results['Stacks on'] = self.n_stacks_op
         h2_results['Power Per Stack [kW]'] = power_per_stack
@@ -244,19 +244,151 @@ class PEM_H2_Clusters:
     def make_lifetime_performance_df_all_opt(self,deg_signal,V_init,power_per_stack):
 
         t_eod_existance_based_rated,t_eod_operation_based_rated = self.calc_stack_replacement_info(deg_signal)
-        t_eod_existance_based,t_eod_operation_based=self.new_calc_stack_replacement_info(deg_signal,V_init) #new
-        life_data_df = {}
         
-        t_eod_opt = [t_eod_operation_based_rated,t_eod_existance_based_rated,t_eod_operation_based,t_eod_existance_based]
-        t_eod_desc = ['Optimistic - Active','Optimistic - Sim','Conservative - Active','Conservative - Sim']
-        self.stack_life_opt = pd.Series(dict(zip(t_eod_desc,t_eod_opt)),name='Stack Life [hrs]')
-        for i,t_eod in enumerate(t_eod_opt):
-            lifetime_performance = self.estimate_lifetime_capacity_factor(power_per_stack,V_init,deg_signal,t_eod) #new
-            # life_data_df[t_eod_desc[i]] = lifetime_performance
+        # cf = self.estimate_life(power_per_stack,V_init,deg_signal,t_eod_operation_based_rated,t_eod_existance_based_rated)
+        old_life_est = self.estimate_lifetime_capacity_factor(power_per_stack,V_init,deg_signal,t_eod_existance_based_rated) #new
+        t_eod_opt = [t_eod_operation_based_rated,t_eod_existance_based_rated]
+        
+        t_eod_desc = ['Stack Life [hours]','Time until replacement [hours]']
+        
+        if self.include_deg_penalty:
+            desc = 'full losses'
+        else:
+            desc = 'warm-up losses'
+        
+        df = pd.concat([old_life_est.loc[desc],pd.Series(dict(zip(t_eod_desc,t_eod_opt)))])
+        return df
+        # return pd.Series(life_data_df)
+    def estimate_life(self,power_per_stack,V_cell,V_deg,stack_life,time_until_replacement):
+        #this is buggy
+        cause_desc = ['Steady','On/Off','Fatigue']
+        end_sim_deg_per_cause = np.array([self.output_dict['Total Uptime Degradation [V]'],self.output_dict['System Cycle Degradation [V]'],self.output_dict['Total Actual Fatigue Degradation [V]']])
+        percent_of_deg = end_sim_deg_per_cause/V_deg[-1]
+        eol_deg_per_cause = self.d_eol_curve[-1]*percent_of_deg
+        eol_Vsteady_deg = eol_deg_per_cause[0]
+        eol_Vonoff_deg = eol_deg_per_cause[1]
+        eol_Vfatigue_deg = eol_deg_per_cause[2]
 
-            life_data_df[t_eod_desc[i]] = pd.concat([lifetime_performance,pd.Series([t_eod]*len(lifetime_performance.index),name='Stack Life [hrs]',index = lifetime_performance.index)],axis=1)
-            
-        return pd.Series(life_data_df)
+        frac_of_life_operating = stack_life/time_until_replacement #hours on / sim time
+        
+        cluster_cycling = [0] + list(np.diff(self.cluster_status)) #no delay at beginning of sim
+        cluster_cycling = np.array(cluster_cycling)
+        t_sim = len(power_per_stack)
+        frac_of_time_on = np.sum(self.cluster_status)/t_sim
+
+        startup_time=600 #[sec]
+        startup_ratio = 1-(startup_time/self.dt)
+        #number of off-cycles
+        #1 if turning off
+        offcycle_cnt = np.where(cluster_cycling < 0, -1*cluster_cycling, 0)
+        offcycle_cnt = np.array([0] + list(offcycle_cnt))
+        ncycles_pr_dt = np.sum(offcycle_cnt)/t_sim
+        ncycles_until_replacement = ncycles_pr_dt*time_until_replacement
+
+        h2_multiplier = np.where(cluster_cycling > 0, startup_ratio, 1)
+        turned_on_status = np.where(cluster_cycling > 0, 1, 0)
+        warmup_mult = np.where(cluster_cycling > 0, 5/6, 1)
+        
+        power_binwidth_kW = 10
+        power_bin_edges = np.arange(0.1*self.stack_rating_kW,self.stack_rating_kW+power_binwidth_kW,power_binwidth_kW)
+        power_kW_bins = power_bin_edges[:-1] + (power_binwidth_kW/2)
+        # power_kW_bins = np.linspace(0.1,1,50)*self.stack_rating_kW #center point
+        # bin_offset_power = (power_kW_bins[1]-power_kW_bins[0])/2
+        # power_bin_edges = power_kW_bins - bin_offset_power
+        # power_bin_edges = np.insert(power_bin_edges,len(power_bin_edges),power_kW_bins[-1])
+        power_cnt,bins = np.histogram(power_per_stack,bins=power_bin_edges)
+        below_min_power_cnt = len(power_per_stack) - np.sum(power_cnt)
+        # power_pdf = power_cnt/np.sum(power_cnt)
+        power_pdf = power_cnt/len(power_per_stack) #probability of operating at a load range relative to time until replacement
+
+        #sum(power_pdf) = frac_of_time_on (sanity check)
+        turned_on_power_cnt,bins = np.histogram(turned_on_status*power_per_stack,bins=power_bin_edges)
+        #power after being turned on
+
+        I_per_bin = calc_current((power_kW_bins,self.T_C),*self.curve_coeff)
+        # W_faradic_loss = self.faradaic_efficiency(I_per_bin)
+        h2_nom_per_bin = self.max_stacks*self.h2_production_rate(I_per_bin,n_stacks_op=1)
+        V_cell_per_bin = self.cell_design(self.T_C,I_per_bin)
+        W_steady_deg = self.dt*self.steady_deg_rate*V_cell_per_bin
+
+        rf_cycles = rainflow.count_cycles(V_cell, nbins=10)
+        rf_sum = np.sum([pair[0] * pair[1] for pair in rf_cycles])
+        #((eol_Vfatigue_deg/self.rate_fatigue)/rf_sum)*frac_of_time_on approx = stack_life
+        #
+        #
+        V_fatigue_sim=rf_sum*self.rate_fatigue
+        V_fatigue_pr_dt = V_fatigue_sim/t_sim #avg
+        V_fatigue_until_replacement = V_fatigue_pr_dt*time_until_replacement
+
+        V_deg_onoff_fatigue_until_replacement = V_fatigue_until_replacement + (ncycles_until_replacement*self.onoff_deg_rate)
+        V_steady_deg_until_deol = self.d_eol_curve[-1] - V_deg_onoff_fatigue_until_replacement
+        life_Vcell_est = V_steady_deg_until_deol/(self.dt*self.steady_deg_rate)
+        
+        avg_on_hourly_V_deg_fatigue_onoff = (V_fatigue_sim/(t_sim*frac_of_time_on)) + (np.sum(offcycle_cnt)*self.onoff_deg_rate/(t_sim*frac_of_time_on))
+        #NEWWW-----
+        #self.output_dict['Sim End RF Track']
+        #sanity check: np.sum(power_pdf*time_until_replacement) == stack_life
+        op_hrs_pr_life = power_pdf*time_until_replacement
+        V_steady_deg_life_Wpdf = op_hrs_pr_life*self.dt*self.steady_deg_rate*V_cell_per_bin
+        #sanity check: sum(V_steady_deg_life_Wpdf) == eol_Vsteady_deg
+        n_life_offcycles = eol_Vonoff_deg/self.onoff_deg_rate
+        
+        n_life_offhours = (1-frac_of_time_on)*time_until_replacement
+        avg_offtime_duration = n_life_offhours/n_life_offcycles
+        avg_ontime_between_off = (time_until_replacement-n_life_offhours)/n_life_offcycles
+        avg_full_cycle_duration = avg_offtime_duration + avg_ontime_between_off
+        V_steady_deg_per_ontime_cycle = (power_pdf*avg_full_cycle_duration)*self.dt*self.steady_deg_rate*V_cell_per_bin
+        V_fatigue_deg_pr_ontime_cycle = avg_ontime_between_off*(eol_Vfatigue_deg/stack_life)
+        V_cell_pr_ontime_cycle= (power_pdf*avg_full_cycle_duration)*V_cell_per_bin
+        H2_nom_per_ontime_cycle = (power_pdf*avg_full_cycle_duration)*h2_nom_per_bin
+        I_nom_per_ontime_cycle = (power_pdf*avg_full_cycle_duration)*I_per_bin
+        #double check below
+        # relative_eff_change_per_ontime_cycle = ((V_cell_pr_ontime_cycle + (V_steady_deg_per_ontime_cycle + (V_fatigue_deg_pr_ontime_cycle/len(power_pdf))))/V_cell_pr_ontime_cycle)-1
+        turn_on_power_pdf = turned_on_power_cnt/np.sum(turned_on_power_cnt) 
+        #above is only 1 cycle
+        n_cycles = np.arange(1,np.ceil(n_life_offcycles)+2,1)
+        life_h2_est = 0
+        V_deg_track = 0
+        warm_up_loss = 0
+        deg_loss = 0
+        no_loss=0
+        steady_deg = np.zeros(len(n_cycles))
+        fatigue_deg = np.zeros(len(n_cycles))
+        cycle_deg = np.zeros(len(n_cycles))
+        tot_deg = np.zeros(len(n_cycles))
+        for i,n in enumerate(n_cycles):
+            steady_deg[i] = np.sum(n*(V_steady_deg_per_ontime_cycle))
+            fatigue_deg[i] = n*(V_fatigue_deg_pr_ontime_cycle)
+            cycle_deg[i] = (n-1)*(self.onoff_deg_rate)
+            # v_deg_pr_bin = n*V_steady_deg_per_ontime_cycle + (n-1)*self.onoff_deg_rate
+            # v_deg_pr_bin = n*(V_steady_deg_per_ontime_cycle + (V_fatigue_deg_pr_ontime_cycle/len(power_pdf))) + ((n-1)*(self.onoff_deg_rate))#((n-1)*(self.onoff_deg_rate/len(power_pdf)))
+            v_deg_pr_bin = n*(V_steady_deg_per_ontime_cycle)  + ((n-1)*(self.onoff_deg_rate + V_fatigue_deg_pr_ontime_cycle))#((n-1)*(self.onoff_deg_rate/len(power_pdf)))
+            tot_deg[i] = np.sum(v_deg_pr_bin)
+            eff_multiplier = (V_cell_per_bin + v_deg_pr_bin)/V_cell_per_bin
+            I_deg_per_bin = I_per_bin/eff_multiplier
+            h2_actual_pr_bin_kg = self.max_stacks*self.h2_production_rate(I_deg_per_bin,n_stacks_op=1)
+            # eff_multiplier = (V_cell_pr_ontime_cycle + v_deg_pr_bin)/V_cell_pr_ontime_cycle
+            # h2_actual_pr_bin = H2_nom_per_ontime_cycle/eff_multiplier
+            h2_actual_pr_bin = (power_pdf*avg_full_cycle_duration)*h2_actual_pr_bin_kg
+            warmup_losses = (startup_time/self.dt)*turn_on_power_pdf*h2_actual_pr_bin
+            warm_up_loss +=np.sum(warmup_losses)
+            life_h2_est += np.sum(h2_actual_pr_bin)
+            deg_loss += (np.sum(H2_nom_per_ontime_cycle)-np.sum(h2_actual_pr_bin))
+            no_loss += np.sum(H2_nom_per_ontime_cycle)
+            # relative_eff_change_per_ontime_cycle = ((V_cell_pr_ontime_cycle + (V_steady_deg_per_ontime_cycle + (V_fatigue_deg_pr_ontime_cycle/len(power_pdf))))/V_cell_pr_ontime_cycle)-1
+            # n_life_offcycles*(np.sum(V_steady_deg_per_ontime_cycle + (V_fatigue_deg_pr_ontime_cycle/len(power_pdf)) + (self.onoff_deg_rate/len(power_pdf))))
+        #
+        V_deg_eol = steady_deg[-1]+cycle_deg[-1]+fatigue_deg[-1]
+        []
+        # h2_losses_from_turnon_life = ncycles_until_replacement*(startup_time/self.dt)*h2_nom_per_bin*(turned_on_power_cnt/len(power_per_stack)) #h2(power)*prob_of_turn_on(power)
+        p_consumed_max,rated_h2_hr = self.rated_h2_prod()
+        life_cf = (life_h2_est-warm_up_loss) / (avg_full_cycle_duration*n*rated_h2_hr)
+
+        # life_cf = (life_h2_est-np.sum(h2_losses_from_turnon_life)) / (avg_full_cycle_duration*n*rated_h2_hr)
+        return life_cf
+        
+        
+
     def find_eol_voltage_curve(self,eol_eff_percent_loss):
         eol_eff_mult = (100+eol_eff_percent_loss)/100
         i_bol = self.output_dict['BOL Efficiency Curve Info']['Current'].values
@@ -477,7 +609,11 @@ class PEM_H2_Clusters:
         t_eod_operation_based = (1/frac_of_life_used)*operational_time_dt #[hrs]
         #time between replacement [hrs] based on simulation length
         t_eod_existance_based = (1/frac_of_life_used)*sim_time_dt
-        
+        #CF shouldn't be different
+        #just report out one capacity factor
+        self.frac_of_life_used = frac_of_life_used
+        self.percent_of_sim_operating = operational_time_dt/sim_time_dt
+
         return t_eod_existance_based,t_eod_operation_based
     def new_calc_stack_replacement_info(self,deg_signal,V_cell):
         
@@ -502,12 +638,19 @@ class PEM_H2_Clusters:
         avg_sim_eff_drop = np.sum(weighted_pdf)
         self.frac_of_life_used = avg_sim_eff_drop / self.eol_eff_drop
         
+        #number of "awake" hours until death
         t_eod_operation_based = (self.eol_eff_drop/avg_sim_eff_drop)*(stack_operational_hrs) 
+        #number of total (awake + asleep) hours until death
         t_eod_existance_based = (self.eol_eff_drop/avg_sim_eff_drop)*(sim_length_hrs)
+        #time of death 
+        #stack life either 1) stack is on 2) years in between replacements
+        #HFTO says stack life based on hours of operation
+        #capacity factor is the same
+
         self.percent_of_sim_operating = stack_operational_hrs/sim_length_hrs
 
-        self.time_between_replacements=t_eod_existance_based
-        self.operational_time_between_replacements=t_eod_operation_based
+        self.time_between_replacements=t_eod_existance_based #Time between replacement
+        self.operational_time_between_replacements=t_eod_operation_based #Stack life based on hours of operation
 
         return t_eod_existance_based,t_eod_operation_based
     
@@ -525,12 +668,12 @@ class PEM_H2_Clusters:
         
         # sim_length = len(power_in_kW)
         #TODO: change it from operational hours life to sim-based life: DONE
-        lifetime_power_kW = np.tile(power_in_kW,int(full_sims_until_dead+1))[0:int(np.ceil(time_between_replacements))]
+        lifetime_power_kW = np.tile(power_in_kW,int(full_sims_until_dead+1))#[0:int(np.ceil(time_between_replacements))]
         I_lifetime_noDeg = calc_current((lifetime_power_kW,self.T_C), *self.curve_coeff)
         V_cell_lifetime = self.cell_design(self.T_C,I_lifetime_noDeg)
-        n_stacks_on_life = np.tile(self.n_stacks_op,int(full_sims_until_dead+1))[0:int(np.ceil(time_between_replacements))]
+        n_stacks_on_life = np.tile(self.n_stacks_op,int(full_sims_until_dead+1))#[0:int(np.ceil(time_between_replacements))]
         h2_lifetime_noDeg_noWarmup = self.h2_production_rate(I_lifetime_noDeg,n_stacks_on_life) #if no start-up
-        h2_warmup_multiplier_lifetime = np.tile(h2_multiplier,int(full_sims_until_dead+1))[0:int(np.ceil(time_between_replacements))]
+        h2_warmup_multiplier_lifetime = np.tile(h2_multiplier,int(full_sims_until_dead+1))#[0:int(np.ceil(time_between_replacements))]
         
         #steady deg
         lifetime_cluster_status = self.system_design(lifetime_power_kW,self.max_stacks)
@@ -547,12 +690,18 @@ class PEM_H2_Clusters:
 
         Vdeg_lifetime = np.cumsum(steady_deg_per_hr_lifetime) + np.cumsum(stack_off_deg_per_hr_lifetime) + V_fatigue_lifetime
         eff_mult_lifetime = (V_cell_lifetime + Vdeg_lifetime)/V_cell_lifetime #(1 + eff drop)
+        
+        V_cell_rated = self.output_dict['BOL Efficiency Curve Info']['Cell Voltage'].values[-1]
+        rated_eff_mult_lifetime = (V_cell_rated + Vdeg_lifetime)/V_cell_rated
+        idx_dead = np.argwhere(rated_eff_mult_lifetime>(1+self.eol_eff_drop))[0][0]
+        # idx_dead = np.argwhere(eff_mult_lifetime>(1+self.eol_eff_drop))[0][0]
         I_deg_lifetime = I_lifetime_noDeg/eff_mult_lifetime
         h2_prod_lifetime_deg_noWarmup = self.h2_production_rate(I_deg_lifetime,n_stacks_on_life) 
         lifetime_h2_deg_warmup = h2_warmup_multiplier_lifetime*h2_prod_lifetime_deg_noWarmup
 
         _,rated_h2_pr_stack_BOL=self.rated_h2_prod()
-        lifetime_rated_h2_nodeg = rated_h2_pr_stack_BOL*len(lifetime_power_kW)*self.max_stacks
+        # lifetime_rated_h2_nodeg = rated_h2_pr_stack_BOL*len(lifetime_power_kW)*self.max_stacks
+        lifetime_rated_h2_nodeg = rated_h2_pr_stack_BOL*idx_dead*self.max_stacks
         # capfac_noDeg_noWarmup = np.sum(h2_lifetime_noDeg_noWarmup)/lifetime_rated_h2_nodeg
         # capfac_noDeg_withWarmup = np.sum(h2_lifetime_noDeg_noWarmup*h2_warmup_multiplier_lifetime)/lifetime_rated_h2_nodeg
         # capfac_deg_noWarmup = np.sum(h2_prod_lifetime_deg_noWarmup)/lifetime_rated_h2_nodeg
@@ -561,20 +710,23 @@ class PEM_H2_Clusters:
         h2_lifetime_noDeg_withWarmup=h2_lifetime_noDeg_noWarmup*h2_warmup_multiplier_lifetime
         losses_desc = ['no losses','warm-up losses','degradation losses','full losses']
         # case_desc = ['Simulation Based','Lifetime Estimate']
-        params = ['Capacity Factor [-]','Total Hydrogen Produced [kg]','Average Annual Hydrogen Produced [kg]','Average Efficiency [kWh/kg]']
+        params = ['Lifetime Capacity Factor [-]','Lifetime Hydrogen Produced [kg]','Lifetime Average Annual Hydrogen Produced [kg]','Average Efficiency [kWh/kg]']
         # case_desc = ['Simulation','Lifetime (no losses)','Lifetime (warmup losses)','Lifetime (deg losses)','Lifetime (full losses)']
         
-        lifetime_est_vals = [h2_lifetime_noDeg_noWarmup,h2_lifetime_noDeg_withWarmup,h2_prod_lifetime_deg_noWarmup,lifetime_h2_deg_warmup]
+        lifetime_est_vals = [h2_lifetime_noDeg_noWarmup[:idx_dead],h2_lifetime_noDeg_withWarmup[:idx_dead],h2_prod_lifetime_deg_noWarmup[:idx_dead],lifetime_h2_deg_warmup[:idx_dead]]
 
         cf = lambda lifetime_h2,life_h2_capacity : np.sum(lifetime_h2)/life_h2_capacity
         total_h2 = lambda lifetime_h2: np.sum(lifetime_h2)
         avg_annual_h2 = lambda lifetime_h2: 8760*np.sum(lifetime_h2)/len(lifetime_h2)
-        avg_eff_kWh_pr_kg = lambda lifetime_h2,lifetime_power_kW: np.sum(lifetime_power_kW)/np.sum(lifetime_h2)
+        # avg_eff_kWh_pr_kg = lambda lifetime_h2,lifetime_power_kW: np.sum(lifetime_power_kW)/np.sum(lifetime_h2)
+        avg_eff_kWh_pr_kg = lambda lifetime_h2,lifetime_power_kW,n_stacks_on_life: np.sum(lifetime_power_kW*n_stacks_on_life)/np.sum(lifetime_h2)
+        
         cf_vals = [cf(lh2,lifetime_rated_h2_nodeg) for lh2 in lifetime_est_vals]
         lifetime_h2_vals = [total_h2(lh2) for lh2 in lifetime_est_vals]
         avg_yearly_h2_vals = [avg_annual_h2(lh2) for lh2 in lifetime_est_vals]
-        avg_eff_vals =[avg_eff_kWh_pr_kg(lh2,lifetime_power_kW) for lh2 in lifetime_est_vals]
-        
+        # avg_eff_vals =[avg_eff_kWh_pr_kg(lh2,lifetime_power_kW) for lh2 in lifetime_est_vals]
+        avg_eff_vals =[avg_eff_kWh_pr_kg(lh2,lifetime_power_kW[:idx_dead],n_stacks_on_life[:idx_dead]) for lh2 in lifetime_est_vals]
+
         lifetime_performance_df=pd.DataFrame(dict(zip(params,[cf_vals,lifetime_h2_vals,avg_yearly_h2_vals,avg_eff_vals])),index = losses_desc)
         
         #see when eff_mult from sim gives the change required to go from end of last full life year to 
@@ -619,13 +771,13 @@ class PEM_H2_Clusters:
         self.output_dict['Off-Cycles'] = cycle_cnt
         return stack_off_deg_per_hr
 
-    def approx_fatigue_degradation(self,voltage_signal):
+    def approx_fatigue_degradation(self,voltage_signal,dt_fatigue_calc_hrs=168):
         #should not use voltage values when voltage_signal = 0
         #aka - should only be counted when electrolyzer is on
         # import rainflow
         
         
-        dt_fatigue_calc_hrs = 24*7#calculate per week
+        # dt_fatigue_calc_hrs = 24*7#calculate per week
         t_calc=np.arange(0,len(voltage_signal)+dt_fatigue_calc_hrs ,dt_fatigue_calc_hrs ) 
         v_max=np.max(voltage_signal)
         v_min=np.min(voltage_signal)
@@ -1203,8 +1355,9 @@ class PEM_H2_Clusters:
         h2_results_aggregates['Total Off-Cycles'] = np.sum(self.off_cycle_cnt)
         h2_results_aggregates['Final Degradation [V]'] =self.cumulative_Vdeg_per_hr_sys[-1]
         h2_results_aggregates['IV curve coeff'] = self.curve_coeff
-        h2_results_aggregates['Life'] = lifetime_performance_df
-        h2_results_aggregates['Stack Life Summary'] = self.stack_life_opt
+        # h2_results_aggregates['Life'] = lifetime_performance_df
+        h2_results_aggregates.update(lifetime_performance_df.to_dict()) 
+        # h2_results_aggregates['Stack Life Summary'] = self.stack_life_opt
 
         h2_results['Stacks on'] = self.n_stacks_op
         h2_results['Power Per Stack [kW]'] = power_per_stack
