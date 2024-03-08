@@ -893,3 +893,12 @@ class PEM_H2_Clusters:
       
         []
         return h2_results, h2_results_aggregates
+
+
+if __name__ == '__main__':
+    cluster_size_mw = 1
+    plant_life = 30
+   
+    pem = PEM_H2_Clusters(cluster_size_mw, plant_life, user_defined_EOL_percent_eff_loss = True, eol_eff_percent_loss=10,include_degradation_penalty=True)
+    pem.output_dict['BOL Efficiency Curve Info']
+    []
