@@ -1,0 +1,57 @@
+name: "Example 07"
+
+# SiteInfo
+site: 
+  data:
+    lat: 35.2018863
+    lon: -101.945027
+    elev: 1099
+    year: 2013
+    tz: -6
+    site_boundaries:
+      verts:
+        - [3.06, 288.87]
+        - [0.0, 1084.03]
+        - [1784.05, 1084.24]
+        - [1794.09, 999.64]
+        - [1494.34, 950.97]
+        - [712.64, 262.8]
+        - [1216.98, 272.36]
+        - [1217.76, 151.62]
+        - [708.14, 0.0]
+      verts_simple:
+        - [3.06, 288.87]
+        - [0.0, 1084.03]
+        - [1784.05, 1084.24]
+        - [1794.09, 999.64]
+        - [1216.98, 272.36]
+        - [1217.76, 151.62]
+        - [708.14, 0.0]
+    urdb_label: "5ca4d1175457a39b23b3d45e"
+  hub_height: 140.0
+  capacity_hours: []
+  desired_schedule: []
+  solar: true
+  wind: true
+  wave: false
+  wind_resource_origin: "WTK"
+
+technologies:
+  pv:
+    system_capacity_kw: 50000
+  wind:
+    num_turbines: 10
+    turbine_rating_kw: 6000
+    hub_height: 115
+    rotor_diameter: 196
+    model_name: 'pysam'
+
+  grid:
+    interconnect_kw: 50000
+
+config:
+  simulation_options:
+    pv:
+      skip_financial: True
+    wind:
+      skip_financial: True

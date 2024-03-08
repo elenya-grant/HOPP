@@ -1,0 +1,15 @@
+plant:
+  useful_life: 30
+
+wind:
+  Turbine:
+    turbine_model: '2023NREL_Bespoke_6MW_196'
+    wind_resource_shear: 0.33
+  Farm:
+    wind_farm_wake_model: 3
+  sim_default_losses: 12.83 #[%]
+solar:
+electrolyzer:
+  stack_size_MW: 10
+  EOL_eff_drop: 10
+  include_degradation_penalty: True
