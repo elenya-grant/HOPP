@@ -13,8 +13,10 @@ def update_site(hopp_config,site_data,hub_height):
 def update_technology_capacities(hopp_config,site_data):
     
     turbine_size_mw = hopp_config['technologies']['wind']['turbine_rating_kw']/1000
-    n_turbines = int(site_data['wind_size_mw']/turbine_size_mw)
-    hopp_config['technologies']['pv']['system_capacity_kw'] = 1000*site_data['solar_size_mw']
+    # n_turbines = int(site_data['wind_size_mw']/turbine_size_mw)
+    n_turbines = int(site_data['Wind Size [MW]']/turbine_size_mw)
+    # hopp_config['technologies']['pv']['system_capacity_kw'] = 1000*site_data['solar_size_mw']
+    hopp_config['technologies']['pv']['system_capacity_kw'] = 1000*site_data['Solar Size [MW]']
     hopp_config['technologies']['wind']['num_turbines'] = n_turbines
 
     return hopp_config
@@ -32,11 +34,13 @@ def set_wind_info(hi,params_config_init,input_dir):
     params_config = copy.deepcopy(params_config_init)
     turb_params,power_curve = get_wind_info(params_config['wind']['Turbine']['turbine_model'],input_dir)
     params_config['wind']['Turbine'].pop('turbine_model')
-    params_config['wind'].pop('sim_default_losses')
+    # params_config['wind'].pop('sim_default_losses')
     params_config['wind']['Turbine']['wind_turbine_powercurve_powerout'] = power_curve['Power [kW]'].to_list()
     params_config['wind']['Turbine']['wind_turbine_powercurve_windspeeds'] = power_curve['Wind Speed [m/s]'].to_list()
     hi.hopp.system.wind._system_model.assign(params_config['wind'])
     hi.system.wind._system_model.assign(params_config['wind'])
+    # hi.system.wind._system_model.Losses.assign({'avail_turb_loss':0.58})
+    # hi.hopp.system.wind._system_model.Losses.assign({'avail_turb_loss':0.58})
     return hi
 
 def get_hybrid_plant_power(hi):
@@ -87,10 +91,22 @@ def make_timeseries_df(H2_soc,H2_demand,h2_prod,site_index,state):
     df.index = [[site_id,site_id,site_id],['H2 SOC [kg]','H2 Demand [kg]','H2 Production [kg]']]
     return df
 
-def make_site_detailed_results(h2_results,H2_Timeseries,hybrid_plant_generation,site_index,state,site_output_dir):
+def make_site_detailed_results(h2_results,H2_Timeseries,hi,hybrid_plant_generation,site_index,site_info,site_output_dir):
     
-    df = pd.concat([pd.Series(h2_results),H2_Timeseries,pd.Series({'Hybrid Plant Generation [kWh]':hybrid_plant_generation})])
-    site_id = '{}-{}_Results.pkl'.format(site_index,state)
+    pv_gen = pd.Series({'Solar Generation [kWh]':np.array(hi.system.pv.generation_profile)})
+    wind_gen = pd.Series({'Wind Generation [kWh]':np.array(hi.system.wind.generation_profile)})
+    hybrid_gen = pd.Series({'Hybrid Plant Generation [kWh]':hybrid_plant_generation})
+    pv_aep = np.sum(hi.system.pv.generation_profile)
+    wind_aep = np.sum((hi.system.wind.generation_profile))
+    hybrid_aep = np.sum(hybrid_plant_generation)
+    wind_cf = wind_aep/(site_info['wind_size_mw']*1000*8760)
+    pv_cf = pv_aep/(site_info['solar_size_mw']*1000*8760)
+    keys = ['Wind AEP [kWh/yr]','Solar AEP [kWh/yr]','Wind CF [-]','PV CF [-]','Hybrid AEP [kWh/yr]']
+    vals = [wind_aep,pv_aep,wind_cf,pv_cf,hybrid_aep]
+    hpp_res = dict(zip(keys,vals))
+    # df = pd.concat([pd.Series(h2_results),H2_Timeseries,pd.Series({'Hybrid Plant Generation [kWh]':hybrid_plant_generation})])
+    df = pd.concat([pd.Series(h2_results),H2_Timeseries,pv_gen,wind_gen,hybrid_gen,pd.Series(hpp_res)])
+    site_id = '{}b-{}_Results.pkl'.format(site_index,site_info['state'])
     filepath = os.path.join(site_output_dir,site_id)
     df.to_pickle(filepath)
 
