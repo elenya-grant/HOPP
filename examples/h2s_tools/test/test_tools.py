@@ -32,7 +32,7 @@ def set_wind_info(hi,params_config_init,input_dir):
     params_config = copy.deepcopy(params_config_init)
     turb_params,power_curve = get_wind_info(params_config['wind']['Turbine']['turbine_model'],input_dir)
     params_config['wind']['Turbine'].pop('turbine_model')
-    params_config['wind'].pop('sim_default_losses')
+    # params_config['wind'].pop('sim_default_losses')
     params_config['wind']['Turbine']['wind_turbine_powercurve_powerout'] = power_curve['Power [kW]'].to_list()
     params_config['wind']['Turbine']['wind_turbine_powercurve_windspeeds'] = power_curve['Wind Speed [m/s]'].to_list()
     params_config['wind']['Turbine']["wind_turbine_rotor_diameter"] = turb_params['rotor_diameter']
