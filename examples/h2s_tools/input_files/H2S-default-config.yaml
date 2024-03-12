@@ -28,7 +28,7 @@ site:
         - [1217.76, 151.62]
         - [708.14, 0.0]
     urdb_label: "5ca4d1175457a39b23b3d45e"
-  hub_height: 140.0
+  hub_height: 115.0 #140.0
   capacity_hours: []
   desired_schedule: []
   solar: true
