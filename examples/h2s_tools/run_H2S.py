@@ -5,8 +5,13 @@ set_nrel_key_dot_env()
 import pandas as pd
 import numpy as np
 import os
+import sys
 from h2s_tools.tools import update_site, update_technology_capacities, set_wind_info,get_hybrid_plant_power,run_electrolyzer,get_hydrogen_storage_SOC,make_timeseries_df,make_site_detailed_results
 from h2s_tools.tools import get_wind_info
+
+start_site_num = sys.argv[1] 
+print("starting run at site: {}".format(start_site_num))
+start_site = start_site_num-1
 save_site_details = True
 
 this_dir = os.path.dirname(__file__)
@@ -31,7 +36,7 @@ hopp_config['technologies']['wind']['hub_height'] = turb_params['hub_height']
 print("-------------------------")
 print("Starting Hydrogen Storage Runs...")
 print("-------------------------")
-for i in range(len(site_df)):
+for i in range(start_site,len(site_df)):
     config = update_site(hopp_config,site_df.iloc[i],turb_params['hub_height'])
     config = update_technology_capacities(config,site_df.iloc[i])
     hi_init = HoppInterface(config)

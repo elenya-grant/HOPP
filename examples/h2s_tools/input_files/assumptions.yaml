@@ -12,6 +12,7 @@ wind:
   # sim_default_losses: 12.83 #[%]
 solar:
 electrolyzer:
-  stack_size_MW: 10
+  electrolyzer_size_mw: 1000
+  stack_size_MW: 40
   EOL_eff_drop: 10
   include_degradation_penalty: True

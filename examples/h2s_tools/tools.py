@@ -58,7 +58,7 @@ def get_hydrogen_storage_SOC(hydrogen_production_kg_pr_hr):
     return h2_soc
 
 def run_electrolyzer(hybrid_plant_generation_profile,params_config,site_data):
-    electrolyzer_size_mw = site_data['electrolyzer_size_mw']
+    electrolyzer_size_mw = params_config['electrolyzer']['electrolyzer_size_mw']
     stack_size_MW = params_config['electrolyzer']['stack_size_MW']
     use_degradation_penalty = params_config['electrolyzer']['include_degradation_penalty']
     number_electrolyzer_stacks = int(electrolyzer_size_mw/stack_size_MW)
@@ -99,8 +99,8 @@ def make_site_detailed_results(h2_results,H2_Timeseries,hi,hybrid_plant_generati
     pv_aep = np.sum(hi.system.pv.generation_profile)
     wind_aep = np.sum((hi.system.wind.generation_profile))
     hybrid_aep = np.sum(hybrid_plant_generation)
-    wind_cf = wind_aep/(site_info['wind_size_mw']*1000*8760)
-    pv_cf = pv_aep/(site_info['solar_size_mw']*1000*8760)
+    wind_cf = wind_aep/(site_info['Wind Size [MW]']*1000*8760)
+    pv_cf = pv_aep/(site_info['Solar Size [MW]']*1000*8760)
     keys = ['Wind AEP [kWh/yr]','Solar AEP [kWh/yr]','Wind CF [-]','PV CF [-]','Hybrid AEP [kWh/yr]']
     vals = [wind_aep,pv_aep,wind_cf,pv_cf,hybrid_aep]
     hpp_res = dict(zip(keys,vals))
