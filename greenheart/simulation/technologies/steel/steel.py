@@ -1,9 +1,11 @@
-from typing import Dict, Union, Optional
+import copy
+from typing import Dict, Union, Optional, Tuple
 
 import ProFAST
 import pandas as pd
 from attrs import define, Factory, field
 
+import os
 
 @define
 class Feedstocks:
@@ -233,6 +235,7 @@ class SteelCapacityModelOutputs:
     steel_plant_capacity_mtpy: float
     hydrogen_amount_kgpy: float
 
+
 def run_size_steel_plant_capacity(config: SteelCapacityModelConfig) -> SteelCapacityModelOutputs:
     """
     Calculates either the annual steel production in metric tons based on plant capacity and
@@ -271,6 +274,7 @@ def run_size_steel_plant_capacity(config: SteelCapacityModelConfig) -> SteelCapa
         steel_plant_capacity_mtpy=steel_plant_capacity_mtpy,
         hydrogen_amount_kgpy=hydrogen_amount_kgpy
     )
+
 
 def run_steel_model(plant_capacity_mtpy: float, plant_capacity_factor: float) -> float:
     """
@@ -539,6 +543,10 @@ class SteelFinanceModelConfig:
             Financial assumptions for model calculations.
         install_years (int): The number of years over which the plant is installed.
         gen_inflation (float): General inflation rate.
+        save_plots (bool): select whether or not to save output plots
+        show_plots (bool): select whether or not to show output plots during run
+        output_dir (str): where to store any saved plots or data
+        design_scenario_id (int): what design scenario the plots correspond to
     """
 
     plant_life: int
@@ -553,7 +561,10 @@ class SteelFinanceModelConfig:
     financial_assumptions: Dict[str, float] = Factory(dict)
     install_years: int = 3
     gen_inflation: float = 0.00
-
+    save_plots: bool = False
+    show_plots: bool = False
+    output_dir: str = "./output/"
+    design_scenario_id: int = 0
 
 @define
 class SteelFinanceModelOutputs:
@@ -613,7 +624,6 @@ def run_steel_finance_model(
 
     # apply all params passed through from config
     for param, val in config.financial_assumptions.items():
-        print(f"setting {param}: {val}")
         pf.set_params(param, val)
 
     analysis_start = int(list(config.grid_prices.keys())[0]) - config.install_years
@@ -839,8 +849,101 @@ def run_steel_finance_model(
     summary = pf.get_summary_vals()
     price_breakdown = pf.get_cost_breakdown()
 
+    if config.save_plots or config.show_plots:
+        savepaths = [
+            config.output_dir + "figures/capex/",
+            config.output_dir + "figures/annual_cash_flow/",
+            config.output_dir + "figures/lcos_breakdown/",
+            config.output_dir + "data/",
+        ]
+        for savepath in savepaths:
+            if not os.path.exists(savepath):
+                os.makedirs(savepath)
+
+        pf.plot_capital_expenses(
+            fileout=savepaths[0] + "steel_capital_expense_%i.pdf" % (config.design_scenario_id),
+            show_plot=config.show_plots,
+        )
+        pf.plot_cashflow(
+            fileout=savepaths[1] + "steel_cash_flow_%i.png"
+            % (config.design_scenario_id),
+            show_plot=config.show_plots,
+        )
+
+        pd.DataFrame.from_dict(data=pf.cash_flow_out).to_csv(
+            savepaths[3] + "steel_cash_flow_%i.csv" % (config.design_scenario_id)
+        )
+
+        pf.plot_costs(
+            savepaths[2] + "lcos_%i" % (config.design_scenario_id),
+            show_plot=config.show_plots,
+        )
+
     return SteelFinanceModelOutputs(
         sol=sol,
         summary=summary,
         price_breakdown=price_breakdown,
+    )
+
+
+def run_steel_full_model(greenheart_config: dict, save_plots=False, show_plots=False, output_dir="./output/", design_scenario_id=0) -> Tuple[SteelCapacityModelOutputs, SteelCostModelOutputs, SteelFinanceModelOutputs]:
+    """
+    Runs the full steel model, including capacity, cost, and finance models.
+
+    Args:
+        greenheart_config (dict): The configuration for the greenheart model.
+
+    Returns:
+        Tuple[SteelCapacityModelOutputs, SteelCostModelOutputs, SteelFinanceModelOutputs]:
+            A tuple containing the outputs of the steel capacity, cost, and finance models.
+    """
+    # this is likely to change as we refactor to use config dataclasses, but for now
+    # we'll just copy the config and modify it as needed
+    config = copy.deepcopy(greenheart_config)
+
+    steel_costs = config["steel"]["costs"]
+    steel_capacity = config["steel"]["capacity"]
+    feedstocks = Feedstocks(**steel_costs["feedstocks"])
+
+    # run steel capacity model to get steel plant size
+    # uses hydrogen amount from electrolyzer physics model
+    capacity_config = SteelCapacityModelConfig(
+        feedstocks=feedstocks,
+        **steel_capacity
+    )
+    steel_capacity = run_size_steel_plant_capacity(capacity_config)
+
+    # run steel cost model
+    steel_costs["feedstocks"] = feedstocks
+    steel_cost_config = SteelCostModelConfig(
+        plant_capacity_mtpy=steel_capacity.steel_plant_capacity_mtpy,
+        **steel_costs
+    )
+    steel_cost_config.plant_capacity_mtpy = steel_capacity.steel_plant_capacity_mtpy
+    steel_costs = run_steel_cost_model(steel_cost_config)
+
+    # run steel finance model
+    steel_finance = config["steel"]["finances"]
+    steel_finance["feedstocks"] = feedstocks
+
+    steel_finance_config = SteelFinanceModelConfig(
+        plant_capacity_mtpy=steel_capacity.steel_plant_capacity_mtpy,
+        plant_capacity_factor=capacity_config.input_capacity_factor_estimate,
+        steel_production_mtpy=run_steel_model(
+            steel_capacity.steel_plant_capacity_mtpy,
+            capacity_config.input_capacity_factor_estimate,
+        ),
+        costs=steel_costs,
+        show_plots=show_plots, 
+        save_plots=save_plots,
+        output_dir=output_dir,
+        design_scenario_id=design_scenario_id,
+        **steel_finance
+    )
+    steel_finance = run_steel_finance_model(steel_finance_config)
+
+    return (
+        steel_capacity,
+        steel_costs,
+        steel_finance
     )

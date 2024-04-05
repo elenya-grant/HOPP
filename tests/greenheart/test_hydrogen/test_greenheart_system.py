@@ -1,157 +1,347 @@
-from re import S
-from greenheart.simulation.greenheart_simulation import run_simulation
-from pytest import approx
-import unittest
-
 import os
 
+from pytest import approx, warns, raises
+import yaml
+from yamlinclude import YamlIncludeConstructor
+import warnings
+import pathlib
+
+from greenheart.simulation.greenheart_simulation import (
+    run_simulation,
+    GreenHeartSimulationConfig,
+)
+
 from hopp.utilities.keys import set_nrel_key_dot_env
+from greenheart.tools.eco.utilities import visualize_plant
+
 set_nrel_key_dot_env()
 
-import yaml
-from yamlinclude import YamlIncludeConstructor 
-
-from pathlib import Path
 from ORBIT.core.library import initialize_library
 
 dirname = os.path.dirname(__file__)
 orbit_library_path = os.path.join(dirname, "input_files/")
 
-YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir=os.path.join(orbit_library_path, 'floris/'))
-YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir=os.path.join(orbit_library_path, 'turbines/'))
+YamlIncludeConstructor.add_to_loader_class(
+    loader_class=yaml.FullLoader, base_dir=os.path.join(orbit_library_path, "floris/")
+)
+YamlIncludeConstructor.add_to_loader_class(
+    loader_class=yaml.FullLoader, base_dir=os.path.join(orbit_library_path, "turbines/")
+)
 
 initialize_library(orbit_library_path)
 
-class TestSimulationWind(unittest.TestCase):
-    def setUp(self) -> None:
-        return super().setUp()
+turbine_model = "osw_18MW"
+filename_turbine_config = os.path.join(
+    orbit_library_path, f"turbines/{turbine_model}.yaml"
+)
+filename_orbit_config = os.path.join(
+    orbit_library_path, f"plant/orbit-config-{turbine_model}-stripped.yaml"
+)
+filename_floris_config = os.path.join(
+    orbit_library_path, f"floris/floris_input_{turbine_model}.yaml"
+)
+filename_greenheart_config = os.path.join(
+    orbit_library_path, f"plant/greenheart_config.yaml"
+)
+filename_greenheart_config_onshore = os.path.join(
+        orbit_library_path, f"plant/greenheart_config_onshore.yaml"
+)
+filename_hopp_config = os.path.join(
+    orbit_library_path, f"plant/hopp_config.yaml"
+)
+filename_hopp_config_wind_wave = os.path.join(
+        orbit_library_path, f"plant/hopp_config_wind_wave.yaml"
+)
+filename_hopp_config_wind_wave_solar = os.path.join(
+        orbit_library_path, f"plant/hopp_config_wind_wave_solar.yaml"
+)
+filename_hopp_config_wind_wave_solar_battery = os.path.join(
+        orbit_library_path, f"plant/hopp_config_wind_wave_solar_battery.yaml"
+)
+
+def test_simulation_wind(subtests):
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config,
+        filename_greenheart_config=filename_greenheart_config,
+        filename_turbine_config=filename_turbine_config,
+        filename_orbit_config=filename_orbit_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=False,
+        use_profast=True,
+        post_processing=True,
+        incentive_option=1,
+        plant_design_scenario=1,
+        output_level=5,
+    )
+    lcoe, lcoh, _, hi = run_simulation(config)
+
+    with subtests.test("lcoh"):
+        assert lcoh == approx(
+            7.057994298481547
+        )  # TODO base this test value on something
+
+    with subtests.test("lcoe"):
+        assert lcoe == approx(
+            0.10816180445700445
+        )  # TODO base this test value on something
+
+    with subtests.test("energy sources"):
+        expected_annual_energy_hybrid = hi.system.annual_energies.wind
+        assert hi.system.annual_energies.hybrid == approx(expected_annual_energy_hybrid)
+
+    with subtests.test("num_turbines conflict raise warning"):
+        config.orbit_config["plant"]["num_turbines"] = 400
+        with warns(UserWarning, match=f"The 'num_turbines' value"):
+            lcoe, lcoh, _, hi = run_simulation(config)
+            
+    with subtests.test("depth conflict raise warning"):
+        config.orbit_config["site"]["depth"] = 4000
+        with warns(UserWarning, match=f"The site depth value"):
+            lcoe, lcoh, _, hi = run_simulation(config)
+
+    with subtests.test("turbine_spacing conflict raise warning"):
+        config.orbit_config["plant"]["turbine_spacing"] = 400
+        with warns(UserWarning, match=f"The 'turbine_spacing' value"):
+            lcoe, lcoh, _, hi = run_simulation(config)
+
+    with subtests.test("row_spacing conflict raise warning"):
+        config.orbit_config["plant"]["row_spacing"] = 400
+        with warns(UserWarning, match=f"The 'row_spacing' value"):
+            lcoe, lcoh, _, hi = run_simulation(config)
+
+def test_simulation_wind_wave(subtests):
+
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config_wind_wave,
+        filename_greenheart_config=filename_greenheart_config,
+        filename_turbine_config=filename_turbine_config,
+        filename_orbit_config=filename_orbit_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=False,
+        use_profast=True,
+        post_processing=True,
+        incentive_option=1,
+        plant_design_scenario=1,
+        output_level=5,
+    )
+
+    lcoe, lcoh, _, hi = run_simulation(config)
+
+    # TODO base this test value on something
+    with subtests.test("lcoh"):
+        assert lcoh == approx(8.133894926897252)
+
+    # prior to 20240207 value was approx(0.11051228251811765) # TODO base this test value on something
+    with subtests.test("lcoe"):
+        assert lcoe == approx(0.12887769358919945)
+
+
+def test_simulation_wind_wave_solar(subtests):
+
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config_wind_wave_solar,
+        filename_greenheart_config=filename_greenheart_config,
+        filename_turbine_config=filename_turbine_config,
+        filename_orbit_config=filename_orbit_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=False,
+        use_profast=True,
+        post_processing=True,
+        incentive_option=1,
+        plant_design_scenario=11,
+        output_level=5,
+    )
+
+    lcoe, lcoh, _, hi = run_simulation(config)
+
+    # prior to 20240207 value was approx(10.823798551850347)
+    # TODO base this test value on something. Currently just based on output at writing.
+    with subtests.test("lcoh"):
+        assert lcoh == approx(12.597232748295273)
+
+    # prior to 20240207 value was approx(0.11035426429749774)
+    # TODO base this test value on something. Currently just based on output at writing.
+    with subtests.test("lcoe"):
+        assert lcoe == approx(0.12868090262684384)
+
+
+def test_simulation_wind_wave_solar_battery(subtests):
+
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config_wind_wave_solar_battery,
+        filename_greenheart_config=filename_greenheart_config,
+        filename_turbine_config=filename_turbine_config,
+        filename_orbit_config=filename_orbit_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=False,
+        use_profast=True,
+        post_processing=True,
+        incentive_option=1,
+        plant_design_scenario=10,
+        output_level=5,
+    )
+
+    lcoe, lcoh, _, hi = run_simulation(config)
+
+    with subtests.test("lcoh"):
+        # TODO base this test value on something. Currently just based on output at writing.
+        assert lcoh == approx(16.984071652636903)
+
+    # TODO base this test value on something. Currently just based on output at writing.
+    with subtests.test("lcoe"):
+        # TODO base this test value on something. Currently just based on output at writing.
+        assert lcoe == approx(0.12936583137325117)  
+
+
+def test_simulation_wind_onshore(subtests):
+
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config,
+        filename_greenheart_config=filename_greenheart_config_onshore,
+        filename_turbine_config=filename_turbine_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=False,
+        use_profast=True,
+        post_processing=False,
+        incentive_option=1,
+        plant_design_scenario=9,
+        output_level=5,
+    )
+    # based on 2023 ATB moderate case for onshore wind
+    config.hopp_config["config"]["cost_info"]["wind_installed_cost_mw"] = 1434000.0 
+    # based on 2023 ATB moderate case for onshore wind
+    config.hopp_config["config"]["cost_info"]["wind_om_per_kw"] = 29.567
+    # set skip_financial to false for onshore wind
+    config.hopp_config["config"]["simulation_options"]["wind"]["skip_financial"] = False
+
+    lcoe, lcoh, _, _ = run_simulation(config)
+
+    # TODO base this test value on something
+    with subtests.test("lcoh"):
+        assert lcoh == approx(3.040736244214041)  
+
+    # TODO base this test value on something
+    with subtests.test("lcoe"):
+        assert lcoe == approx(0.034869608896094494)
+
+
+def test_simulation_wind_onshore_steel_ammonia(subtests):
+
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config,
+        filename_greenheart_config=filename_greenheart_config_onshore,
+        filename_turbine_config=filename_turbine_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=True,
+        output_dir=os.path.abspath(pathlib.Path(__file__).parent.resolve()) + "/output/",
+        use_profast=True,
+        post_processing=True,
+        incentive_option=1,
+        plant_design_scenario=9,
+        output_level=7,
+    )
     
-    @classmethod
-    def setUpClass(self):
-        super(TestSimulationWind, self).setUpClass()
+    # based on 2023 ATB moderate case for onshore wind
+    config.hopp_config["config"]["cost_info"]["wind_installed_cost_mw"] = 1434000.0 
+    # based on 2023 ATB moderate case for onshore wind
+    config.hopp_config["config"]["cost_info"]["wind_om_per_kw"] = 29.567
+    config.hopp_config["technologies"]["wind"]["fin_model"]["system_costs"]["om_fixed"][0] = config.hopp_config["config"]["cost_info"]["wind_om_per_kw"]
+    # set skip_financial to false for onshore wind
+    config.hopp_config["config"]["simulation_options"]["wind"]["skip_financial"] = False
+    lcoe, lcoh, steel_finance, ammonia_finance = run_simulation(config)
 
-        turbine_model = "osw_18MW"
-        filename_turbine_config = os.path.join(orbit_library_path, f"turbines/{turbine_model}.yaml")
-        filename_orbit_config = os.path.join(orbit_library_path, f"plant/orbit-config-{turbine_model}.yaml")
-        filename_floris_config = os.path.join(orbit_library_path, f"floris/floris_input_{turbine_model}.yaml")
-        filename_greenheart_config = os.path.join(orbit_library_path, f"plant/greenheart_config.yaml")
-        filename_hopp_config = os.path.join(orbit_library_path, f"plant/hopp_config.yaml")
+    # TODO base this test value on something
+    with subtests.test("lcoh"):
+        assert lcoh == approx(3.040736244214041)
 
-        self.lcoe, self.lcoh, _ = run_simulation(filename_hopp_config, filename_greenheart_config, filename_turbine_config, filename_orbit_config, filename_floris_config, verbose=False, show_plots=False, save_plots=False,  use_profast=True, post_processing=False,incentive_option=1, plant_design_scenario=1, output_level=4)
+    # TODO base this test value on something
+    with subtests.test("lcoe"):
+        assert lcoe == approx(0.034869649135212274)
 
-    def test_lcoh(self):
-        assert self.lcoh == approx(7.057994298603964) # TODO base this test value on something
-    def test_lcoe(self):
-        assert self.lcoe == approx(0.10816180445700445) # TODO base this test value on something
+    # TODO base this test value on something
+    with subtests.test("steel_finance"):
+        lcos_expected = 1348.5863267221866
 
-class TestSimulationWindWave(unittest.TestCase):
-    def setUp(self) -> None:
-        return super().setUp()
+        assert steel_finance.sol.get("price") == approx(lcos_expected)
+
+    # TODO base this test value on something
+    with subtests.test("ammonia_finance"):
+        lcoa_expected = 1.0419316870652462
+
+        assert ammonia_finance.sol.get("price") == approx(lcoa_expected)
+
+def test_simulation_wind_battery_pv_onshore_steel_ammonia(subtests):
+
+    plant_design_scenario = 12
+
+    config = GreenHeartSimulationConfig(
+        filename_hopp_config=filename_hopp_config_wind_wave_solar_battery,
+        filename_greenheart_config=filename_greenheart_config_onshore,
+        filename_turbine_config=filename_turbine_config,
+        filename_orbit_config=filename_orbit_config,
+        filename_floris_config=filename_floris_config,
+        verbose=False,
+        show_plots=False,
+        save_plots=True,
+        output_dir=os.path.abspath(pathlib.Path(__file__).parent.resolve()) + "/output/",
+        use_profast=True,
+        post_processing=True,
+        incentive_option=1,
+        plant_design_scenario=plant_design_scenario,
+        output_level=7,
+    )
     
-    @classmethod
-    def setUpClass(self):
-        super(TestSimulationWindWave, self).setUpClass()
+    # based on 2023 ATB moderate case for onshore wind
+    config.hopp_config["config"]["cost_info"]["wind_installed_cost_mw"] = 1434000.0 
+    # based on 2023 ATB moderate case for onshore wind
+    config.hopp_config["config"]["cost_info"]["wind_om_per_kw"] = 29.567
+    config.hopp_config["technologies"]["wind"]["fin_model"]["system_costs"]["om_fixed"][0] = config.hopp_config["config"]["cost_info"]["wind_om_per_kw"]
+    # set skip_financial to false for onshore wind
+    config.hopp_config["config"]["simulation_options"]["wind"]["skip_financial"] = False
+    # exclude wave
+    config.hopp_config["technologies"].pop("wave")
+    config.hopp_config["site"]["wave"] = False
+    # colocated end-use
+    config.greenheart_config["plant_design"][f"scenario{plant_design_scenario}"]["transportation"] = "colocated" 
 
-        turbine_model = "osw_18MW"
-        filename_turbine_config = os.path.join(orbit_library_path, f"turbines/{turbine_model}.yaml")
-        filename_orbit_config = os.path.join(orbit_library_path, f"plant/orbit-config-{turbine_model}.yaml")
-        filename_floris_config = os.path.join(orbit_library_path, f"floris/floris_input_{turbine_model}.yaml")
-        filename_greenheart_config = os.path.join(orbit_library_path, f"plant/greenheart_config.yaml")
-        filename_hopp_config = os.path.join(orbit_library_path, f"plant/hopp_config_wind_wave.yaml")
+    # run the simulation
+    lcoe, lcoh, steel_finance, ammonia_finance = run_simulation(config)
 
-        self.lcoe, self.lcoh, _ = run_simulation(filename_hopp_config, filename_greenheart_config, filename_turbine_config, filename_orbit_config, filename_floris_config, verbose=False, show_plots=False, save_plots=False,  use_profast=True, post_processing=False,incentive_option=1, plant_design_scenario=1, output_level=4)
+    # TODO base this test value on something
+    with subtests.test("lcoh"):
+        assert lcoh == approx(3.0191128494981223)
 
-    def test_lcoh(self):
-        assert self.lcoh == approx(8.12006529664307) #TODO base this test value on something
-    def test_lcoe(self):
-        assert self.lcoe == approx(0.12863386719193057) # prior to 20240207 value was approx(0.11051228251811765) # TODO base this test value on something
+    # TODO base this test value on something
+    with subtests.test("lcoe"):
+        assert lcoe == approx(0.034676133587257206)
 
-class TestSimulationWindWaveSolar(unittest.TestCase):
-    def setUp(self) -> None:
-        return super().setUp()
-    
-    @classmethod
-    def setUpClass(self):
-        super(TestSimulationWindWaveSolar, self).setUpClass()
+    # TODO base this test value on something
+    with subtests.test("steel_finance"):
+        lcos_expected = 1340.641495821553
 
-        turbine_model = "osw_18MW"
-        filename_turbine_config = os.path.join(orbit_library_path, f"turbines/{turbine_model}.yaml")
-        filename_orbit_config = os.path.join(orbit_library_path, f"plant/orbit-config-{turbine_model}.yaml")
-        filename_floris_config = os.path.join(orbit_library_path, f"floris/floris_input_{turbine_model}.yaml")
-        filename_greenheart_config = os.path.join(orbit_library_path, f"plant/greenheart_config.yaml")
-        filename_hopp_config = os.path.join(orbit_library_path, f"plant/hopp_config_wind_wave_solar.yaml")
+        assert steel_finance.sol.get("price") == approx(lcos_expected)
 
-        self.lcoe, self.lcoh, _ = run_simulation(filename_hopp_config, 
-                                    filename_greenheart_config, 
-                                    filename_turbine_config, 
-                                    filename_orbit_config, 
-                                    filename_floris_config, 
-                                    verbose=False, 
-                                    show_plots=False, 
-                                    save_plots=False,  
-                                    use_profast=True,
-                                    post_processing=False,
-                                    incentive_option=1, 
-                                    plant_design_scenario=7, 
-                                    output_level=4)
+    # TODO base this test value on something
+    with subtests.test("ammonia_finance"):
+        lcoa_expected = 1.0405052843769131
 
-    def test_lcoh(self):
-        assert self.lcoh == approx(12.583155204831298) # prior to 20240207 value was approx(10.823798551850347) #TODO base this test value on something. Currently just based on output at writing.
-    def test_lcoe(self):
-        assert self.lcoe == approx(0.1284376127848134) # prior to 20240207 value was approx(0.11035426429749774) # TODO base this test value on something. Currently just based on output at writing.
+        assert ammonia_finance.sol.get("price") == approx(lcoa_expected)
 
-class TestSimulationWindWaveSolarBattery(unittest.TestCase):
-    def setUp(self) -> None:
-        return super().setUp()
-    
-    @classmethod
-    def setUpClass(self):
-        super(TestSimulationWindWaveSolarBattery, self).setUpClass()
-
-        turbine_model = "osw_18MW"
-        filename_turbine_config = os.path.join(orbit_library_path, f"turbines/{turbine_model}.yaml")
-        filename_orbit_config = os.path.join(orbit_library_path, f"plant/orbit-config-{turbine_model}.yaml")
-        filename_floris_config = os.path.join(orbit_library_path, f"floris/floris_input_{turbine_model}.yaml")
-        filename_greenheart_config = os.path.join(orbit_library_path, f"plant/greenheart_config.yaml")
-        filename_hopp_config = os.path.join(orbit_library_path, f"plant/hopp_config_wind_wave_solar_battery.yaml")
-
-        self.lcoe, self.lcoh, _ = run_simulation(filename_hopp_config, 
-                                    filename_greenheart_config, 
-                                    filename_turbine_config, 
-                                    filename_orbit_config, 
-                                    filename_floris_config, 
-                                    verbose=False, 
-                                    show_plots=False, 
-                                    save_plots=False,  
-                                    use_profast=True,
-                                    post_processing=False,
-                                    incentive_option=1, 
-                                    plant_design_scenario=7, 
-                                    output_level=4)
-
-    def test_lcoh(self):
-        assert self.lcoh == approx(13.22669818008385) #TODO base this test value on something. Currently just based on output at writing.
-    def test_lcoe(self):
-        assert self.lcoe == approx(0.13955940183722207) # TODO base this test value on something. Currently just based on output at writing.
-
-# class TestSimulationWindOnshore(unittest.TestCase):
-#     def setUp(self) -> None:
-#         return super().setUp()
-    
-#     @classmethod
-#     def setUpClass(self):
-#         super(TestSimulationWind, self).setUpClass()
-
-#         turbine_model = "osw_18MW"
-#         filename_turbine_config = os.path.join(orbit_library_path, f"turbines/{turbine_model}.yaml")
-#         filename_orbit_config = os.path.join(orbit_library_path, f"plant/orbit-config-{turbine_model}.yaml")
-#         filename_floris_config = os.path.join(orbit_library_path, f"floris/floris_input_{turbine_model}.yaml")
-#         filename_greenheart_config = os.path.join(orbit_library_path, f"plant/greenheart_config.yaml")
-#         filename_hopp_config = os.path.join(orbit_library_path, f"plant/hopp_config.yaml")
-
-#         self.lcoe, self.lcoh, _ = run_simulation(filename_hopp_config, filename_greenheart_config, filename_turbine_config, filename_orbit_config, filename_floris_config, verbose=False, show_plots=False, save_plots=False,  use_profast=True, post_processing=False,incentive_option=1, plant_design_scenario=1, output_level=4)
-
-#     def test_lcoh(self):
-#         assert self.lcoh == approx(7.057994298481547) # TODO base this test value on something
-#     def test_lcoe(self):
-#         assert self.lcoe == approx(0.10816180445700445) # TODO base this test value on something
+def test_utilities(subtests):
+    with subtests.test("`visualize_plant()` only works with the 'floris' wind model"):
+        hopp_config ={"technologies": {"wind": {"model_name": "pysam"}}}
+        with raises(NotImplementedError, match="only works with the 'floris' wind model"):
+            visualize_plant(hopp_config, None, None, None, None, None, None, None, None, None, None, None)
+            
