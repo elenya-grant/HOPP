@@ -21,9 +21,9 @@ def setup_hopp(
     wind_cost_results=None,
     show_plots=False,
     save_plots=False,
-    output_dir="./output/"
+    output_dir="./output/",
 ):
-  
+    
     if "battery" in hopp_config["technologies"].keys() and \
         ("desired_schedule" not in hopp_config["site"].keys() or hopp_config["site"]["desired_schedule"] == []):
         hopp_config["site"]["desired_schedule"] = [greenheart_config["electrolyzer"]["rating"]]*8760
@@ -46,7 +46,7 @@ def setup_hopp(
         greenheart_config["site"]["mean_windspeed"] = np.average(wind_speed)
 
     ################ set up HOPP technology inputs
-    hopp_technologies = {}
+    
     if hopp_config["site"]["wind"]:
         if hopp_config["technologies"]["wind"]["model_name"] == "floris":
             if design_scenario["wind_location"] == "offshore":
@@ -118,18 +118,14 @@ def setup_hopp(
                 }
             ]
 
-            hopp_technologies["wind"] = {
-                "turbine_rating_kw": turbine_config["turbine_rating"] * 1000,
-                "floris_config": floris_config,  # if not specified, use default SAM models
-            }
+            hopp_config["technologies"]["wind"]["turbine_rating_kw"] = turbine_config["turbine_rating"] * 1000
+            hopp_config["technologies"]["wind"]["floris_config"] = floris_config
 
         elif hopp_config["technologies"]["wind"]["model_name"] == "sam":
-            hopp_technologies["wind"] = {
-                "turbine_rating_kw": turbine_config["turbine_rating"]
-                * 1000,  # convert from MW to kW
-                "hub_height": turbine_config["hub_height"],
-                "rotor_diameter": turbine_config["rotor_diameter"],
-            }
+            hopp_config["technologies"]["wind"]["turbine_rating_kw"] = turbine_config["turbine_rating"] * 1000,  # convert from MW to kW
+            hopp_config["technologies"]["wind"]["hub_height"] = turbine_config["hub_height"]
+            hopp_config["technologies"]["wind"]["rotor_diameter"] = turbine_config["rotor_diameter"]
+
         else:
             raise (
                 ValueError(
@@ -138,16 +134,21 @@ def setup_hopp(
                 % (hopp_config["technologies"]["wind"]["model_name"])
             )
 
-        for key in hopp_technologies["wind"]:
-            if key in hopp_config["technologies"]["wind"]:
-                hopp_config["technologies"]["wind"][key] = hopp_technologies["wind"][
-                    key
-                ]
-            else:
-                hopp_config["technologies"]["wind"].update(
-                    hopp_technologies["wind"][key]
-                )
+    # setup hopp interface
+    hopp_config_internal = copy.deepcopy(hopp_config)
 
+    if "wave" in hopp_config_internal["technologies"].keys():
+        wave_cost_dict = hopp_config_internal["technologies"]["wave"].pop("cost_inputs")
+
+    if "battery" in hopp_config_internal["technologies"].keys():
+        hopp_config_internal["site"].update({"desired_schedule": hopp_site.desired_schedule})
+        
+    hi = HoppInterface(hopp_config_internal)
+    hi.system.site = hopp_site
+
+    if "wave" in hi.system.technologies.keys():
+        hi.system.wave.create_mhk_cost_calculator(wave_cost_dict)
+        
     if show_plots or save_plots:
         # plot wind resource if desired
         print("\nPlotting Wind Resource")
@@ -170,26 +171,12 @@ def setup_hopp(
         print("\n")
 
     ################ return all the inputs for hopp
-    return hopp_config, hopp_site
+    return hi
 
 
 # Function to run hopp from provided inputs from setup_hopp()
-def run_hopp(hopp_config, hopp_site, project_lifetime, verbose=False):
+def run_hopp(hi, project_lifetime, verbose=False):
 
-    hopp_config_internal = copy.deepcopy(hopp_config)
-
-    if "wave" in hopp_config_internal["technologies"].keys():
-        wave_cost_dict = hopp_config_internal["technologies"]["wave"].pop("cost_inputs")
-
-    if "battery" in hopp_config_internal["technologies"].keys():
-        hopp_config_internal["site"].update({"desired_schedule": hopp_site.desired_schedule})
-        
-    hi = HoppInterface(hopp_config_internal)
-    hi.system.site = hopp_site
-
-    if "wave" in hi.system.technologies.keys():
-        hi.system.wave.create_mhk_cost_calculator(wave_cost_dict)
-        
     hi.simulate(project_life=project_lifetime)
 
     # store results for later use
@@ -197,7 +184,7 @@ def run_hopp(hopp_config, hopp_site, project_lifetime, verbose=False):
         "hopp_interface": hi,
         "hybrid_plant": hi.system,
         "combined_hybrid_power_production_hopp": \
-            hi.system.grid._system_model.Outputs.system_pre_interconnect_kwac[0:8759],
+            hi.system.grid._system_model.Outputs.system_pre_interconnect_kwac[0:8760],
         "combined_hybrid_curtailment_hopp": hi.system.grid.generation_curtailed,
         "energy_shortfall_hopp": hi.system.grid.missed_load,
         "annual_energies": hi.system.annual_energies,
