@@ -65,6 +65,7 @@ class LinedRockCavernStorage():
         else:
             raise Exception('input_dict must contain model type of either `papadias` or `hdsam`')
 
+        self.compressor_output_pressure = 200 # Max outlet pressure of lined rock cavern in [1]
         self.labor_rate = input_dict.get('labor_rate', 37.39817) # $(2018)/hr
         self.insurance = input_dict.get('insurance', 1/100) # % of total capital investment
         self.property_taxes = input_dict.get('property_taxes', 1/100) # % of total capital investment
@@ -94,14 +95,14 @@ class LinedRockCavernStorage():
             self.installed_capex = cepci_overall * self.installed_capex
             self.output_dict['lined_rock_cavern_storage_capex'] = self.installed_capex
 
-            outlet_pressure = 200 # Max outlet pressure of lined rock cavern in [1]
+            
             n_compressors = 2
-            storage_compressor = Compressor(outlet_pressure,self.system_flow_rate,n_compressors=n_compressors)
+            storage_compressor = Compressor(self.compressor_output_pressure,self.system_flow_rate,n_compressors=n_compressors)
             storage_compressor.compressor_power()
             motor_rating, power = storage_compressor.compressor_system_power()
             if motor_rating > 1600:
                 n_compressors += 1
-                storage_compressor = Compressor(outlet_pressure,self.system_flow_rate,n_compressors=n_compressors)
+                storage_compressor = Compressor(self.compressor_output_pressure,self.system_flow_rate,n_compressors=n_compressors)
                 storage_compressor.compressor_power()
                 motor_rating, power = storage_compressor.compressor_system_power()
             comp_capex,comp_OM = storage_compressor.compressor_costs()
