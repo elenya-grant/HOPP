@@ -1,6 +1,21 @@
 import math
 import numpy as np
 
+def simple_size_hydrogen_storage(hydrogen_production_profile,hydrogen_demand_kg_pr_hr):
+    if isinstance(hydrogen_demand_kg_pr_hr,float):
+        if hydrogen_demand_kg_pr_hr<np.mean(hydrogen_production_profile):
+            #make less hydrogen than demand
+            hydrogen_demand_kg_pr_hr = np.mean(hydrogen_production_profile)
+    else:
+        if np.sum(hydrogen_demand_kg_pr_hr)<np.sum(hydrogen_production_profile):
+            #make less annual hydrogen than needed
+            #normalize hydrogen demand profile to be met by hydrogen production
+            hydrogen_demand_kg_pr_hr = hydrogen_demand_kg_pr_hr*(np.sum(hydrogen_production_profile)/np.sum(hydrogen_demand_kg_pr_hr))
+    h2_diff = hydrogen_production_profile - hydrogen_demand_kg_pr_hr
+    h2_soc = np.cumsum(h2_diff)
+    max_hydrogen_storage_capacity_kg = np.max(h2_soc) - np.min(h2_soc)
+    max_charge_discharge_rate_kg_pr_hr = np.max(np.abs(h2_diff))
+    return max_hydrogen_storage_capacity_kg,max_charge_discharge_rate_kg_pr_hr,hydrogen_demand_kg_pr_hr
 
 def hydrogen_storage_capacity(H2_Results, electrolyzer_size_mw, hydrogen_demand_kgphr):
     """Calculate storage capacity based on hydrogen demand and production.
