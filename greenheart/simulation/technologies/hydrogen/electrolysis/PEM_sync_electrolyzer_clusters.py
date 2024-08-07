@@ -39,7 +39,7 @@ class PEM_Clusters:
             dt = 3600,
             eol_eff_percent_loss = 10,
             uptime_hours_until_eol = 77600, 
-            n_cycles_until_eol = 614, #update to PEM default
+            n_cycles_until_eol = 1388, #update to PEM default
             ramp_rate_percent = 0.99, #update to PEM default
             turndown_ratio = 0.10, 
             cold_start_delay = 600,
@@ -82,7 +82,7 @@ class PEM_Clusters:
         # water_usage_mass_ratio = 10 #10 kg H2O: 1 kg H2
         
         # OPERATIONAL CONSTRIANTS
-        self.nominal_current_density = 2.0 #[A/cm^2]
+        self.nominal_current_density = 1.9587442587827482 #2.0 #[A/cm^2]
         
         # OPERATING CONDITIONS
         ##TODO: update pressure_operating to be PEM-specific
@@ -117,13 +117,13 @@ class PEM_Clusters:
         self.BOL_design_info.update({"EOL Cell Voltage Degradation Value [V/cell]":self.d_eol})
         # CELL DEGRADATION RATES
         self.steady_deg_rate = self.reset_uptime_degradation_rate(uptime_hours_until_eol)
-        # self.onoff_deg_rate = self.reset_on_off_degradation_rate(n_cycles_until_eol)
+        self.onoff_deg_rate = self.reset_on_off_degradation_rate(n_cycles_until_eol)
         self.describe_degradation_rates()
         
     
-    # def reset_on_off_degradation_rate(self,n_cycles_until_eol):
-    #     onoff_deg_rate = self.d_eol/n_cycles_until_eol
-    #     return onoff_deg_rate
+    def reset_on_off_degradation_rate(self,n_cycles_until_eol):
+        onoff_deg_rate = self.d_eol/n_cycles_until_eol
+        return onoff_deg_rate
     def reset_uptime_degradation_rate(self,uptime_hours_until_eol):
         
         steady_deg_rate = self.d_eol/(self.V_cell_nominal*uptime_hours_until_eol*3600)
@@ -176,6 +176,7 @@ class PEM_Clusters:
         self.BOL_design_info.update({"Stack Operating Temperature [C]":self.T_stack})
         self.BOL_design_info.update({"Stack Anode Pressure [bar]":self.anode_pressure})
         self.BOL_design_info.update({"Stack Cathode Pressure [bar]":self.cathode_pressure})
+        self.BOL_design_info.update({"BOL Rated Stack Power [kW]":self.stack_rating_kW})
         []
 # -------------------------------------------- #      
 # ----- OPERATIONAL CONSTRAINTS & LOSSES ----- #
