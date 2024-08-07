@@ -3,6 +3,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+def estimate_alkaline_footprint_H2A(electrolyzer_size_MW):
+    # Table 12 of https://doi.org/10.2172/2203367
+    land_usage_acres_LP = [15.2,27.4,8.1,22.3]
+    land_usage_acres_HP = [15.2,27.4,8.1,22.3]
+    pass
 def estimate_alkaline_footprint_singlitico(electrolyzer_size_MW):
     #https://doi.org/10.1016/j.rset.2021.100005
     footprint_m2_pr_MW = 95
@@ -106,27 +111,28 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
         V_ohm_electrode[ii] = I_stack*(R_a + R_c)
         V_ohm_electrolyte[ii] = I_stack*(R_ele_bf + R_ele_b)
         V_ohm_membrane[ii] = I_stack*(R_membrane)
-
+    r = 255
     keys = ["I [A]","J [A/cm^2]","V_cell","U_rev","V_act,a","V_act,c","V_ohm,a-c","V_ohm,KOH","V_ohm,mem","Fractional Bubble Coverage","Bulk Bubbling Coeff"]
     vals = [current_range,current_density,V_cell,U_rev,V_act_a,V_act_c,V_ohm_electrode,V_ohm_electrolyte,V_ohm_membrane,theta,epsilon]
     df = pd.DataFrame(dict(zip(keys,vals)))
     df.to_csv(os.path.join(os.path.dirname(__file__),"Alkaline_IV-Curve_Data-{}.csv".format(file_desc)))
 
-    fig, ax = plt.subplots(figsize=[8,8])
+    fig, ax = plt.subplots(figsize=[8,6])
     
     horiz_al = "left"
     vert_al = "center"
     s_font = "medium"#"small"
     w_font = "semibold"
     text_props = {"ha":horiz_al,"va":vert_al,"fontsize":s_font,"fontweight":w_font}
-    alpha_fill = 0.5
+    text_props_arrow = {"ha":horiz_al,"va":"bottom","fontsize":s_font,"fontweight":"heavy"}
+    alpha_fill = 0.75 # 0.5
     v_lw = 1.5
     v_ls = "solid"
     xtext = np.round(np.max(current_density),1)
     #V_act os gold. V_ohm is green, U_rev is grey
 
-    v_color_line = "grey"
-    v_color_fill = "lightgrey"
+    v_color_line = (161/r,182/r,215/r)
+    v_color_fill = (206/r,219/r,235/r)
     y_lb = np.zeros(len(current_density))
     y_ub = U_rev
     y_mid = np.max(y_lb + (y_ub-y_lb)/2)
@@ -141,8 +147,8 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     y_ub+=V_act_a
     y_mid = np.max(y_lb + (y_ub-y_lb)/2)
     v_lw = 0.75
-    v_color_line = "darkorange"
-    v_color_fill = "gold"
+    v_color_line = (244/r,148/r,10/r)
+    v_color_fill = (249/r,201/r,128/r)
     v_ls = "--"
     # ax.plot(current_density,U_rev+V_act_a,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{act,a}$")
     # ax.fill_between(current_density,U_rev,U_rev+V_act_a,color=v_color_fill,alpha=alpha_fill)
@@ -154,8 +160,8 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     y_ub+=V_act_c
     y_mid = np.max(y_lb + (y_ub-y_lb)/2)
     v_lw = 1.5
-    v_color_line = "orange"
-    v_color_fill = "goldenrod"
+    v_color_line = (244/r,148/r,10/r)
+    v_color_fill = (249/r,201/r,128/r)
     v_ls = "solid"
     # ax.plot(current_density,U_rev+V_act_a+V_act_c,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{act,c}$")
     # ax.fill_between(current_density,U_rev+V_act_a,U_rev+V_act_a+V_act_c,color=v_color_fill,alpha=alpha_fill)
@@ -168,8 +174,8 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     y_ub+=V_ohm_electrode
     y_mid = np.max(y_lb + (y_ub-y_lb)/2)
     v_lw = 0.75
-    v_color_line = "green"
-    v_color_fill = "palegreen"
+    v_color_line = (42/r,150/r,67/r)
+    v_color_fill = (117/r,180/r,117/r)
     v_ls = "--"
     # ax.plot(current_density,U_rev+V_act_a+V_act_c+V_ohm_electrode,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{\Omega,a-c}$")
     # ax.fill_between(current_density,U_rev+V_act_a+V_act_c,U_rev+V_act_a+V_act_c+V_ohm_electrode,color=v_color_fill,alpha=alpha_fill)
@@ -180,8 +186,8 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     y_lb+=V_ohm_electrode
     y_ub+=V_ohm_electrolyte
     y_mid = np.max(y_lb + (y_ub-y_lb)/2)
-    v_color_line = "lime"
-    v_color_fill = "lawngreen"
+    v_color_line = (42/r,150/r,67/r)
+    v_color_fill = (117/r,180/r,117/r)
     # ax.plot(current_density,U_rev+V_act_a+V_act_c+V_ohm_electrode+V_ohm_electrolyte,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{\Omega,KOH}$")
     # ax.fill_between(current_density,U_rev+V_act_a+V_act_c+V_ohm_electrode,U_rev+V_act_a+V_act_c+V_ohm_electrode+V_ohm_electrolyte,color=v_color_fill,alpha=alpha_fill)
     ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{\Omega,KOH}$")
@@ -193,25 +199,62 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     y_mid = np.max(y_lb + (y_ub-y_lb)/2)
     v_lw = 1.5
     v_ls = "solid"
-    v_color_line = "darkcyan"
-    v_color_fill = "aqua"
+    v_color_line = (42/r,150/r,67/r)
+    v_color_fill = (117/r,180/r,117/r)
     # ax.plot(current_density,U_rev+V_act_a+V_act_c+V_ohm_electrode+V_ohm_electrolyte+V_ohm_membrane,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{\Omega,mem}$")
     # ax.fill_between(current_density,U_rev+V_act_a+V_act_c+V_ohm_electrode+V_ohm_electrolyte,U_rev+V_act_a+V_act_c+V_ohm_electrode+V_ohm_electrolyte+V_ohm_membrane,color=v_color_fill,alpha=alpha_fill)
     ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{\Omega,mem}$")
     ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
     ax.text(x=xtext,y=y_mid,s="$V_{\Omega,mem}$",color=v_color_line,**text_props)
 
-    v_lw = 0.5
-    ax.plot(current_density,V_cell,color="black",ls="--",label="V_{cell}")
+    v_lw = 1.5
+    v_ls = "solid"
+    v_bol_line_color = (26/r,0,255/r)
+    v_bol_edge_color = (158/r,207/r,224/r)
+    ax.plot(current_density,V_cell,color=v_bol_line_color,ls="solid",label="V_{cell}")
+    # ax.text(x=xtext,y=max(y_ub),s="$V_{cell,BOL}$",color=v_bol_line_color,**text_props)
 
-    ax.set_xlabel("Current Density [A/cm^2]")
+    jj = len(current_density)//2
+    # dy_end = V_cell*(1+alk.eol_eff_drop) - (np.max(V_cell + (V_cell*(1+alk.eol_eff_drop)-V_cell)/2))
+    dy_end = np.max((V_cell*(1+alk.eol_eff_drop)-V_cell)/2)
+    # arrow_start_pos = (xtext/4,max(V_cell))
+    arrow_start_pos = (xtext/5,V_cell[jj]+dy_end)
+    arrow_end_pos = (current_density[jj],V_cell[jj])
+    arrow_kw = {"arrowstyle":"simple","edgecolor":v_bol_edge_color,"facecolor":v_bol_line_color,
+    "linewidth":0.75,"mutation_scale":15,"fill":True}
+    ax.annotate("$\mathbf{V_{cell,BOL}}$",xy=arrow_end_pos,xytext = arrow_start_pos,arrowprops = arrow_kw,color=v_bol_line_color,**text_props_arrow)
+
+    # EOL/V_deg
+    v_eol_line_color = (239/r,0,10/r)
+    v_eol_edge_color = (247/r,165/r,179/r)
+    v_eol_fill_color = (243/r,104/r,121/r)
+    y_ub = V_cell*(1+alk.eol_eff_drop)
+    y_lb = V_cell
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    ax.plot(current_density,y_ub,color=v_eol_line_color,lw=v_lw,ls="--",label="$V_{deg}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_eol_fill_color,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$V_{deg}$",color=v_eol_fill_color,**text_props)
+
+    arrow_start_pos = (xtext/5,y_mid)
+    arrow_end_pos = (current_density[jj],y_ub[jj])
+    arrow_kw = {"arrowstyle":"simple","edgecolor":v_eol_edge_color,"facecolor":v_eol_line_color,
+    "linewidth":0.75,"mutation_scale":15,"fill":True}
+    ax.annotate("$\mathbf{V_{cell,EOL}}$",xy=arrow_end_pos,xytext = arrow_start_pos,arrowprops = arrow_kw,color=v_eol_line_color,**text_props_arrow)
+    # ax.text(x=xtext,y=max(y_ub),s="$V_{deg}$",color=v_eol_fill_color,**text_props)
+    # ax.plot(current_density,V_cell*(1+alk.eol_eff_drop),color=v_eol_line_color,ls="solid",label="V_{cell}")
+    # ax.text(x=xtext,y=y_mid,s="$V_{cell,EOL}$",color=v_bol_line_color,**text_props)
+
+    ax.set_xlabel("Current Density [A/cm^2]",fontsize=s_font)
     x0 = ax.get_xlim()[0]
     x1 = ax.get_xlim()[1] + x0
     ax.set_xlim([0,x1])
     ax.set_ylim([0,ax.get_ylim()[1]])
     # ax.set_xlim([np.min(current_density),np.max(current_density)])
     # ax.set_ylim([0,np.max(V_cell)])
-    ax.set_ylabel("Cell Voltage [V/cell]")
+    ax.set_ylabel("Cell Voltage [V/cell]",fontsize=s_font)
+    ax.tick_params(axis="both",labelsize=s_font)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     fig.tight_layout()
     fig.savefig(os.path.join(os.path.dirname(__file__),"Alkaline_IV-Curve-{}.pdf".format(file_desc)),bbox_inches = "tight")
     plt.close()
