@@ -943,8 +943,8 @@ if __name__ == "__main__":
     alk = ALK_Clusters(cluster_size_mw=1,plant_life=30)
     from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_tools import get_efficiency_curve
     df = get_efficiency_curve(alk,file_desc = "July2024")
-    # from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_tools import plot_IV_curve
-    # plot_IV_curve(alk,file_desc="7-bar")
+    from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_tools import plot_IV_curve
+    plot_IV_curve(alk,file_desc="new")
     alk.nominal_current*alk.V_cell_nominal
     alk.V_cell_nominal #around 1.9
     alk.nominal_current_density #0.5
