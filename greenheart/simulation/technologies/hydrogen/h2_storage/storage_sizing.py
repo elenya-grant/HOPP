@@ -3,7 +3,7 @@ import numpy as np
 
 def simple_size_hydrogen_storage(hydrogen_production_profile,hydrogen_demand_kg_pr_hr):
     if isinstance(hydrogen_demand_kg_pr_hr,float):
-        if hydrogen_demand_kg_pr_hr<np.mean(hydrogen_production_profile):
+        if hydrogen_demand_kg_pr_hr>np.mean(hydrogen_production_profile):
             #make less hydrogen than demand
             hydrogen_demand_kg_pr_hr = np.mean(hydrogen_production_profile)
     else:
@@ -97,3 +97,22 @@ def hydrogen_storage_capacity(H2_Results, electrolyzer_size_mw, hydrogen_demand_
     )
 
     return hydrogen_storage_capacity_kg, hydrogen_storage_duration_hr, hydrogen_storage_soc
+
+def hydrogen_storage_dispatch(hydrogen_production_kgphr):
+    hydrogen_demand_kgphr = np.mean(hydrogen_production_kgphr)
+    hydrogen_storage_soc = []
+    for j in range(len(hydrogen_production_kgphr)):
+        if j == 0:
+            hydrogen_storage_soc.append(
+                hydrogen_production_kgphr[j] - hydrogen_demand_kgphr
+            )
+        else:
+            hydrogen_storage_soc.append(
+                hydrogen_storage_soc[j - 1]
+                + hydrogen_production_kgphr[j]
+                - hydrogen_demand_kgphr
+            )
+    minimum_soc = np.min(hydrogen_storage_soc)
+    if minimum_soc < 0:
+        hydrogen_storage_soc = [x + np.abs(minimum_soc) for x in hydrogen_storage_soc]
+        
