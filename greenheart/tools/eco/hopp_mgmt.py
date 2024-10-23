@@ -209,7 +209,7 @@ def rerun_battery_dispatch(hybrid_plant:HybridSimulation, desired_schedule_kW:fl
                 hybrid_size_kw += model.system_capacity_kw
                 hybrid_nominal_capacity += model.calc_nominal_capacity(interconnection_kW)
                 project_life_gen = np.tile(model.generation_profile, int(project_life / (len(model.generation_profile) // hybrid_plant.site.n_timesteps)))
-                total_gen += project_life_gen
+                
                 if system in non_dispatchable_systems:
                     total_gen_before_battery += project_life_gen
                 total_gen += project_life_gen

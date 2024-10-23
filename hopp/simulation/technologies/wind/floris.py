@@ -89,7 +89,7 @@ class Floris(BaseClass):
         """
         if set_value = None, then retrieve value; otherwise overwrite variable's value
         """
-        if set_value:
+        if set_value is not None:
             self.__setattr__(name, set_value)
         else:
             return self.__getattribute__(name)
