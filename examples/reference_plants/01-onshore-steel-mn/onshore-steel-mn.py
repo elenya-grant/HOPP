@@ -39,7 +39,7 @@ if __name__ == "__main__":
     # incentive_num = 1 #1 and 7
     # pdscenario = 11 #9 and 11
 
-            output_dir = os.path.join(os.path.dirname(__file__),"results-40percent_fullsize_CF1_-policy{}-design{}".format(incentive_num,pdscenario))
+            output_dir = os.path.join(os.path.dirname(__file__),"10-25-2024","results-40percent_fullsize_CF1_-policy{}-design{}".format(incentive_num,pdscenario))
             # output_dir = os.path.join(os.path.dirname(__file__),"CF1_results-fullsize-policy{}-design{}".format(incentive_num,pdscenario))
             os.makedirs(output_dir,exist_ok=True)
             config = GreenHeartSimulationConfig(
