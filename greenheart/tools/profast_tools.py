@@ -104,13 +104,14 @@ def make_price_breakdown(price_breakdown,pf_config):
         + price_breakdown.loc[price_breakdown['Name']=='Interest expense','NPV'].tolist()[0]\
         + price_breakdown.loc[price_breakdown['Name']=='Dividends paid','NPV'].tolist()[0]\
         - price_breakdown.loc[price_breakdown['Name']=='Inflow of debt','NPV'].tolist()[0]\
-        - price_breakdown.loc[price_breakdown['Name']=='Inflow of equity','NPV'].tolist()[0]
+        - price_breakdown.loc[price_breakdown['Name']=='Inflow of equity','NPV'].tolist()[0]\
+        - price_breakdown.loc[price_breakdown['Name']=='One time capital incentive','NPV'].tolist()[0]
     remaining_financial = price_breakdown.loc[price_breakdown['Name']=='Non-depreciable assets','NPV'].tolist()[0]\
         + price_breakdown.loc[price_breakdown['Name']=='Cash on hand reserve','NPV'].tolist()[0]\
         + price_breakdown.loc[price_breakdown['Name']=='Property insurance','NPV'].tolist()[0]\
         - price_breakdown.loc[price_breakdown['Name']=='Sale of non-depreciable assets','NPV'].tolist()[0]\
         - price_breakdown.loc[price_breakdown['Name']=='Cash on hand recovery','NPV'].tolist()[0]
-    
+    ["One time capital incentive"]
     if 'capital_items' in config_keys:
         capital_items = pf_config['capital_items']
         for item in capital_items:
