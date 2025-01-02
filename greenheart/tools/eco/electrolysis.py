@@ -31,10 +31,12 @@ from greenheart.simulation.technologies.hydrogen.electrolysis.custom_electrolysi
 from greenheart.simulation.technologies.hydrogen.electrolysis.run_h2_PEM import (
     run_h2_PEM,
 )
-from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_H2_LT_electrolyzer_Clusters import (
-    PEM_H2_Clusters as PEMClusters,
-)
-
+# from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_H2_LT_electrolyzer_Clusters import (
+#     PEM_H2_Clusters as PEMClusters,
+# )
+from greenheart.simulation.technologies.hydrogen.electrolysis.H2_PEM_H2_electrolyzer_clusters_original import PEM_H2_Clusters as PEMClusters
+from greenheart.simulation.technologies.hydrogen.electrolysis.HFTO_PEM_2022_Stack import PEM_H2_Clusters_2022 
+from greenheart.simulation.technologies.hydrogen.electrolysis.HFTO_PEM_2026_stack import PEM_H2_Clusters_2026
 # from electrolyzer import run_electrolyzer
 def electrolyzer_plots(
     electrolyzer_physics_results,
@@ -205,9 +207,9 @@ def run_electrolyzer_physics(
         "eol_eff_percent_loss": greenheart_config["electrolyzer"][
             "eol_eff_percent_loss"
         ],
-        "uptime_hours_until_eol": greenheart_config["electrolyzer"][
-            "uptime_hours_until_eol"
-        ],
+        # "uptime_hours_until_eol": greenheart_config["electrolyzer"][
+        #     "uptime_hours_until_eol"
+        # ],
         "include_degradation_penalty": greenheart_config["electrolyzer"][
             "include_degradation_penalty"
         ],
@@ -217,6 +219,14 @@ def run_electrolyzer_physics(
     if "time_between_replacement" in greenheart_config['electrolyzer']:
         warnings.warn("`time_between_replacement` as an input is deprecated. It is now calculated internally and is output in electrolyzer_physics_results['H2_Results']['Time Until Replacement [hrs]'].")
 
+    if 'pem_stack_type' in greenheart_config["electrolyzer"]:
+        pem_type = greenheart_config["electrolyzer"]["pem_stack_type"]
+    else:
+        pem_type = "original"
+    if 'use_default_stack_life' in greenheart_config["electrolyzer"]:
+        if not greenheart_config["electrolyzer"]["use_default_stack_life"]:
+            pem_param_dict.update({"uptime_hours_until_eol": greenheart_config["electrolyzer"]["uptime_hours_until_eol"]})
+        
     H2_Results, h2_ts, h2_tot, power_to_electrolyzer_kw = run_h2_PEM(
         electrical_generation_timeseries=energy_to_electrolyzer_kw,
         electrolyzer_size=electrolyzer_size_mw,
@@ -229,6 +239,7 @@ def run_electrolyzer_physics(
         user_defined_pem_param_dictionary=pem_param_dict,
         grid_connection_scenario=grid_connection_scenario,  # if not offgrid, assumes steady h2 demand in kgphr for full year
         hydrogen_production_capacity_required_kgphr=hydrogen_production_capacity_required_kgphr,
+        pem_type = pem_type,
         debug_mode=False,
         verbose=verbose,
     )
@@ -560,19 +571,25 @@ def run_desal(
     return desal_results
 
 
-def create_1MW_reference_PEM():
+def create_1MW_reference_PEM(pem_type="original"):
     pem_param_dict = {
         "eol_eff_percent_loss": 10,
         "uptime_hours_until_eol": 77600,
         "include_degradation_penalty": True,
         "turndown_ratio": 0.1,
     }
-    pem = PEMClusters(cluster_size_mw=1, plant_life=30, **pem_param_dict)
+    if pem_type=="original":
+        pem = PEMClusters(cluster_size_mw=1, plant_life=30, **pem_param_dict)
+    elif pem_type=="hfto_2022":
+        pem = PEM_H2_Clusters_2022(cluster_size_mw=1, plant_life=30, **pem_param_dict)
+    elif pem_type=="hfto_2026":
+        pem = PEM_H2_Clusters_2026(cluster_size_mw=1, plant_life=30, **pem_param_dict)
+
     return pem
 
 
-def get_electrolyzer_BOL_efficiency():
-    pem_1MW = create_1MW_reference_PEM()
+def get_electrolyzer_BOL_efficiency(pem_type="original"):
+    pem_1MW = create_1MW_reference_PEM(pem_type=pem_type)
     bol_eff = pem_1MW.output_dict["BOL Efficiency Curve Info"][
         "Efficiency [kWh/kg]"
     ].values[-1]
@@ -584,8 +601,9 @@ def size_electrolyzer_for_hydrogen_demand(
     hydrogen_production_capacity_required_kgphr,
     size_for="BOL",
     electrolyzer_degradation_power_increase=None,
+    pem_type="original",
 ):
-    electrolyzer_energy_kWh_per_kg_estimate_BOL = get_electrolyzer_BOL_efficiency()
+    electrolyzer_energy_kWh_per_kg_estimate_BOL = get_electrolyzer_BOL_efficiency(pem_type=pem_type)
     if size_for == "BOL":
         electrolyzer_capacity_MW = (
             hydrogen_production_capacity_required_kgphr

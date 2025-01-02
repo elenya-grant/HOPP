@@ -5,7 +5,10 @@ sys.path.append("")
 # from dotenv import load_dotenv
 import pandas as pd
 
-from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_H2_LT_electrolyzer_Clusters import PEM_H2_Clusters as PEMClusters
+# from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_H2_LT_electrolyzer_Clusters import PEM_H2_Clusters as PEMClusters
+from greenheart.simulation.technologies.hydrogen.electrolysis.HFTO_PEM_2022_Stack import PEM_H2_Clusters_2022 
+from greenheart.simulation.technologies.hydrogen.electrolysis.HFTO_PEM_2026_stack import PEM_H2_Clusters_2026
+from greenheart.simulation.technologies.hydrogen.electrolysis.H2_PEM_H2_electrolyzer_clusters_original import PEM_H2_Clusters as PEMClusters
 # from PEM_H2_LT_electrolyzer_Clusters import (
 #     PEM_H2_Clusters as PEMClusters,
 # )
@@ -51,6 +54,7 @@ class run_PEM_clusters:
     `num_clusters`: number of PEM clusters that can be run independently
     ->ESG note: I have been using num_clusters = 8 for centralized cases
     Nomenclature:
+    "pem_type": either "original","hfto_2022" or "hfto_2026"
     `cluster`: cluster is built up of 1MW stacks
     `stack`: must be 1MW (because of current PEM model)
     """
@@ -63,12 +67,14 @@ class run_PEM_clusters:
         electrolyzer_direct_cost_kw,
         useful_life,
         user_defined_electrolyzer_params,
+        pem_type,
         verbose=True
     ):
         # nomen
         self.cluster_cap_mw = np.round(system_size_mw / num_clusters)
         # capacity of each cluster, must be a multiple of 1 MW
         
+        self.pem_type = pem_type
         self.num_clusters = num_clusters
         self.user_params = user_defined_electrolyzer_params
         self.plant_life_yrs = useful_life
@@ -90,12 +96,24 @@ class run_PEM_clusters:
         self.verbose=verbose
 
     def run_grid_connected_pem(self,system_size_mw,hydrogen_production_capacity_required_kgphr):
-        pem=PEMClusters(
-                    system_size_mw,
-                    self.plant_life_yrs,
-                    **self.user_params,
-                )
-
+        if self.pem_type == "original":
+            pem=PEMClusters(
+                        system_size_mw,
+                        self.plant_life_yrs,
+                        **self.user_params,
+                    )
+        elif self.pem_type == "hfto_2022":
+            pem=PEM_H2_Clusters_2022(
+                        system_size_mw,
+                        self.plant_life_yrs,
+                        **self.user_params,
+                    )
+        elif self.pem_type=="hfto_2026":
+            pem=PEM_H2_Clusters_2026(
+                        system_size_mw,
+                        self.plant_life_yrs,
+                        **self.user_params,
+                    )
         power_timeseries,stack_current=pem.grid_connected_func(hydrogen_production_capacity_required_kgphr)
         h2_ts, h2_tot =pem.run_grid_connected_workaround(power_timeseries,stack_current)
         #h2_ts, h2_tot = pem.run(power_timeseries)
@@ -274,13 +292,30 @@ class run_PEM_clusters:
         # in_dict={'dt':3600}
         for i in range(self.num_clusters):
             # stacks.append(PEMClusters(cluster_size_mw = self.cluster_cap_mw))
-            stacks.append(
-                PEMClusters(
-                    self.cluster_cap_mw,
-                    self.plant_life_yrs,
-                    **self.user_params,
+            if self.pem_type=="original":
+                stacks.append(
+                    PEMClusters(
+                        self.cluster_cap_mw,
+                        self.plant_life_yrs,
+                        **self.user_params,
+                    )
                 )
-            )
+            elif self.pem_type=="hfto_2022":
+                    stacks.append(
+                    PEM_H2_Clusters_2022(
+                        self.cluster_cap_mw,
+                        self.plant_life_yrs,
+                        **self.user_params,
+                    )
+                )
+            elif self.pem_type=="hfto_2026":
+                    stacks.append(
+                    PEM_H2_Clusters_2026(
+                        self.cluster_cap_mw,
+                        self.plant_life_yrs,
+                        **self.user_params,
+                    )
+                )
         end = time.perf_counter()
         if self.verbose:
             print("Took {} sec to run the create clusters".format(round(end - start, 3)))
