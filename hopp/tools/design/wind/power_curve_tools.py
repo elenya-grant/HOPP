@@ -22,3 +22,8 @@ def calculate_power_from_cp(wind_speeds_ms,cp_curve,rotor_diameter,air_density =
     p_wind = 0.5*air_density*rotor_area*(wind_speeds_ms**3)/1e3
     power_kW = list(cp_curve*p_wind)
     return power_kW
+
+def estimate_thrust_coefficient(wind_speeds_ms,cp_curve):
+    #NOTE: this is a placeholder function!
+    ct_curve = list(np.zeros(len(wind_speeds_ms)))
+    return ct_curve
