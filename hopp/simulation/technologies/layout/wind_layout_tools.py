@@ -264,3 +264,37 @@ definition, until the correct number of turbines are within the wind farm bounda
 each of the grid variables can change individually, however the discrete values remain fixed.
 
 """
+
+def find_most_square_layout_dimensions(n_turbs):
+    n_turbs_per_row = np.floor_divide(n_turbs,np.sqrt(n_turbs))
+    n_rows_min = n_turbs//n_turbs_per_row
+    remainder_turbs = n_turbs%n_turbs_per_row
+    if remainder_turbs>n_turbs_per_row:
+        n_extra_rows = np.ceil(remainder_turbs/n_turbs_per_row)
+    elif remainder_turbs==0:
+        n_extra_rows = 0
+    else:
+        n_extra_rows = 1
+
+    n_rows = n_rows_min + n_extra_rows
+
+    return n_turbs_per_row,n_rows
+
+
+def make_site_boundary_for_square_grid_layout(n_turbs,rotor_diam,row_spacing,turbine_spacing):
+    #distance between turbines in same row
+    intrarow_spacing = turbine_spacing*rotor_diam 
+    #distance between rows
+    interrow_spacing = row_spacing*rotor_diam 
+    
+    n_turbs_per_row,n_rows = find_most_square_layout_dimensions(n_turbs)
+    center_x = ((n_turbs_per_row/2)*intrarow_spacing)
+    center_y = ((n_rows/2)*interrow_spacing) + (interrow_spacing*0.25)
+    x_dist_m = 2*center_x
+    y_dist_m = 2*center_y
+    p0 = [0.0,0.0]
+    p1 = [0.0,y_dist_m]
+    p2 = [x_dist_m,y_dist_m]
+    p3 = [x_dist_m,0.0]
+    verts = [p0,p1,p2,p3]
+    return {"site_boundaries":{"verts":verts,"verts_simple":verts}}
