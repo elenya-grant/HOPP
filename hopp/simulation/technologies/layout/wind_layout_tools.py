@@ -51,6 +51,7 @@ def make_grid_lines(site_shape: BaseGeometry,
     if site_shape.is_empty:
         return []
     
+    grid_angle = np.deg2rad(grid_angle)
     grid_angle = (grid_angle + np.pi) % (2 * np.pi) - np.pi  # reset grid_angle to (-pi, pi)
     bounds = site_shape.bounds
     
@@ -288,13 +289,16 @@ def make_site_boundary_for_square_grid_layout(n_turbs,rotor_diam,row_spacing,tur
     interrow_spacing = row_spacing*rotor_diam 
     
     n_turbs_per_row,n_rows = find_most_square_layout_dimensions(n_turbs)
+
     center_x = ((n_turbs_per_row/2)*intrarow_spacing)
     center_y = ((n_rows/2)*interrow_spacing) + (interrow_spacing*0.25)
     x_dist_m = 2*center_x
     y_dist_m = 2*center_y
+    
     p0 = [0.0,0.0]
     p1 = [0.0,y_dist_m]
     p2 = [x_dist_m,y_dist_m]
     p3 = [x_dist_m,0.0]
     verts = [p0,p1,p2,p3]
     return {"site_boundaries":{"verts":verts,"verts_simple":verts}}
+

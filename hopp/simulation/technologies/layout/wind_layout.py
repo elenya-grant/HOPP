@@ -10,9 +10,24 @@ from hopp.utilities.log import hybrid_logger as logger
 from hopp.simulation.technologies.layout.wind_layout_tools import (
     get_best_grid,
     get_evenly_spaced_points_along_border,
-    subtract_turbine_exclusion_zone
+    subtract_turbine_exclusion_zone,
+    make_site_boundary_for_square_grid_layout,
+    create_grid
     )
 from hopp.simulation.technologies.sites.site_info import SiteInfo
+
+from attrs import define, field
+from typing import Optional
+from hopp.utilities.validators import gt_zero, contains, range_val
+
+@define
+class WindBasicGridParameters:
+    row_D_spacing: float
+    turbine_D_spacing: float
+    grid_angle: Optional[float] = field(default = 0.0)
+    row_phase_offset: Optional[float] = field(default = 0.5, validator=range_val(0.0, 1.0))
+    make_most_square: Optional[bool] = field(default = False)
+    site_boundary_constrained: Optional[bool] = field(default = True)
 
 
 class WindBoundaryGridParameters(NamedTuple):
@@ -47,7 +62,7 @@ class WindLayout:
                  site_info: SiteInfo,
                  wind_source: windpower.Windpower,
                  layout_mode: str,
-                 parameters: Union[WindBoundaryGridParameters, WindCustomParameters, None],
+                 parameters: Union[WindBoundaryGridParameters, WindCustomParameters, None, WindBasicGridParameters],
                  min_spacing: float = 200.,
                  ):
         """
@@ -180,6 +195,11 @@ class WindLayout:
 
         self.turb_pos_x, self.turb_pos_y = xcoords, ycoords
         self._set_system_layout()
+
+    # def reset_basic_grid(self,n_turbines):
+    #     self.parameters.
+    #     self.turb_pos_x, self.turb_pos_y = xcoords, ycoords
+    #     self._set_system_layout()
 
     def set_layout_params(self,
                           wind_kw,
