@@ -30,6 +30,7 @@ from hopp.type_dec import (
 )
 from hopp.simulation.base import BaseClass
 from hopp.utilities.validators import contains
+import hopp.simulation.technologies.sites.site_shape_tools as shape_tools
 
 from hopp import ROOT_DIR
 def plot_site(verts, plt_style, labels):
@@ -77,14 +78,26 @@ class SiteInfo(BaseClass):
     data: dict
     """dictionary of site info data with key as:
 
-        - lat (float): site latitude
-        - lon (float): site longitude
-        - year (int): year to get resource data for. Default to 2012
-        - tz (int, optional): timezone of site
-        - elev (int, optional): elevation of site (m)
-        - site_boundaries (dict):
-            - verts (list(list(float))): vertices of site polygon
-        - urdb_label (str,optional): string corresponding to data from utility rate databse
+        - **lat** (*float*): site latitude
+        - **lon** (*float*): site longitude
+        - **year** (*int*): year to get resource data for. Defaults to 2012.
+        - **tz** (*int, optional*): timezone of site
+        - **elev** (*int, optional*): elevation of site (m)
+        - site_boundaries (*dict,optional*):
+            - **verts** (*list[list[float]]*): vertices of site polygon. list of [x,y] coordinates in meters.
+        - site_details (*dict, optional*):
+            - **site_area_m2** (*float*): area of site in square meters
+            - **site_shape** (*str, optional*): shape of site area. Options are "circle", "rectangle", "square" or "hexagon". Defaults to "square".
+            - **aspect_ratio** (*float, optional*): aspect ratio (width/height) if ``site_shape`` is set as "rectangle". Defaults to 1.5.
+            - **x0** (*float, optional*): left-most x coordinate of the site in meters. Defaults to 0.0.
+            - **y0** (*float, optional*): bottom-most x coordinate of the site in meters. Defaults to 0.0.
+        - **urdb_label** (*str, optional*): string corresponding to data from utility rate databse
+        - **solar_lat** (*float, optional*): latitude to get solar resource data if solar plant is in different location that lat/lon
+        - **solar_lon** (*float, optional*): longitude to get solar resource data if solar plant is in different location that lat/lon
+        - **solar_year** (*int, optional*): resource year for solar data if wanting different resource year than ``data["year"]``
+        - **wind_lat** (*float, optional*): latitude to get wind resource data if wind plant is in different location that lat/lon
+        - **wind_lon** (*float, optional*): longitude to get wind resource data for if wind plant is in different location that lat/lon
+        - **wind_year** (*int, optional*): resource year for wind data if wanting different resource than ``data["year"]``
     """
 
     
@@ -115,8 +128,8 @@ class SiteInfo(BaseClass):
     year: int = field(init=False, default=2012)
     tz: Optional[int] = field(init=False, default=None)
     elev: Optional[float] = field(init=False, default=None)
-    solar_resource: Optional[Union[SolarResource,HPCSolarData]] = field(default=None)
-    wind_resource: Optional[Union[WindResource,HPCWindData]] = field(default=None)
+    solar_resource: Optional[Union[SolarResource,HPCSolarData,dict]] = field(default=None)
+    wind_resource: Optional[Union[WindResource,HPCWindData,dict]] = field(default=None)
     wave_resoure: Optional[WaveResource] = field(init=False, default=None)
     elec_prices: Optional[ElectricityPrices] = field(init=False, default=None)
     n_periods_per_day: int = field(init=False)
@@ -152,12 +165,22 @@ class SiteInfo(BaseClass):
 
         data = self.data
         if 'site_boundaries' in data:
-            self.vertices = np.array([np.array(v) for v in data['site_boundaries']['verts']])
-            self.polygon = Polygon(self.vertices)
-            self.polygon = self.polygon.buffer(1e-8)
+            if 'verts' in data['site_boundaries']:
+                self.vertices = np.array([np.array(v) for v in data['site_boundaries']['verts']])
+                self.polygon = Polygon(self.vertices)
+        elif 'site_details' in data:
+            if 'site_area_m2' in data["site_details"]:
+                if 'site_shape' not in data["site_details"]:
+                    data["site_details"].update({"site_shape":"square"})
+                if "x0" not in data["site_details"]:
+                    data["site_details"].update({"x0":0.0})
+                if "y0" not in data["site_details"]:
+                    data["site_details"].update({"y0":0.0})
+                self.polygon,self.vertices = self.make_site_polygon_from_shape(data["site_details"])
+            
+
         if 'kml_file' in data:
             self.kml_data, self.polygon, data['lat'], data['lon'] = self.kml_read(data['kml_file'])
-            self.polygon = self.polygon.buffer(1e-8)
 
         if 'lat' not in data or 'lon' not in data:
             raise ValueError("SiteInfo requires lat and lon")
@@ -176,13 +199,7 @@ class SiteInfo(BaseClass):
             self.elev = data['elev']
         
         if self.solar:
-            if self.solar_resource is None:
-                if self.renewable_resource_origin=="API":
-                    self.solar_resource = SolarResource(data['lat'], data['lon'], data['year'], path_resource=self.path_resource, filepath=self.solar_resource_file)
-                else:
-                    self.solar_resource = HPCSolarData(data['lat'], data['lon'], data['year'],nsrdb_source_path = self.nsrdb_source_path, filepath=self.solar_resource_file)
-            elif isinstance(self.solar_resource,dict):
-                self.solar_resource = SolarResource(data['lat'], data['lon'], data['year'],resource_data = self.solar_resource)
+            self.solar_resource = self.initialize_solar_resource(data)
             self.n_timesteps = len(self.solar_resource.data['gh']) // 8760 * 8760
             self.elev = self.solar_resource.data["elev"]
         if self.wave:
@@ -191,15 +208,7 @@ class SiteInfo(BaseClass):
 
         if self.wind:
             # TODO: allow hub height to be used as an optimization variable
-            if self.wind_resource is None:
-                if self.renewable_resource_origin=="API":
-                    self.wind_resource = WindResource(data['lat'], data['lon'], data['year'], wind_turbine_hub_ht=self.hub_height,
-                                                path_resource=self.path_resource, filepath=self.wind_resource_file, source=self.wind_resource_origin)
-                else:
-                    self.wind_resource = HPCWindData(data['lat'], data['lon'], data['year'], wind_turbine_hub_ht=self.hub_height,
-                                                    wtk_source_path=self.wtk_source_path, filepath=self.wind_resource_file)
-            elif isinstance(self.wind_resource,dict):
-                self.wind_resource = WindResource(data['lat'], data['lon'], data['year'],wind_turbine_hub_ht=self.hub_height,resource_data = self.wind_resource)
+            self.wind_resource = self.initialize_wind_resource(data)
             n_timesteps = len(self.wind_resource.data['data']) // 8760 * 8760
             if self.n_timesteps is None:
                 self.n_timesteps = n_timesteps
@@ -339,3 +348,101 @@ class SiteInfo(BaseClass):
         new_pm = kml.Placemark(name=name)
         new_pm.geometry = polygon
         folder.append(new_pm)
+
+    def make_site_polygon_from_shape(self,site_details:dict):
+        """create site polygon and vertices if "site_details" provided in ``data``.
+
+        Args:
+            site_details (dict): sub-dictionary of ``data``, equivalent to ``data["site_details"]``
+
+        Raises:
+            ValueError: if ``site_details["site_shape"]`` is not one of the following: "circle", "square", "rectangle", or "hexagon"
+
+        Returns:
+            List[shapely.Polygon, np.ndarray(np.ndarray)]: polygon and vertices of site
+        """
+
+        if 'site_area_m2' in site_details and 'site_shape' in site_details:
+            if site_details["site_shape"].lower()=="circle":
+                polygon, vertices = shape_tools.make_circle(site_details['site_area_m2'], x0 = site_details["x0"], y0 = site_details["y0"])
+            elif site_details["site_shape"].lower()=="square":
+                polygon, vertices = shape_tools.make_square(site_details['site_area_m2'], x0 = site_details["x0"], y0 = site_details["y0"])
+            elif site_details["site_shape"].lower()=="rectangle":
+                if "aspect_ratio" in site_details:
+                    polygon, vertices = shape_tools.make_rectangle(site_details['site_area_m2'],aspect_ratio = site_details["aspect_ratio"], x0 = site_details["x0"], y0 = site_details["y0"])
+                else:
+                    polygon, vertices = shape_tools.make_rectangle(site_details['site_area_m2'],x0 = site_details["x0"], y0 = site_details["y0"])
+            elif site_details["site_shape"].lower()=="hexagon":
+                polygon, vertices = shape_tools.make_hexagon(site_details['site_area_m2'], x0 = site_details["x0"], y0 = site_details["y0"])
+            else:
+                raise ValueError("invalid entry for `site_shape`, site_shape must be either 'circle', 'rectangle', 'square' or 'hexagon'")
+            return polygon,vertices
+        else:
+            return None, None
+
+    def initialize_solar_resource(self,data:dict):
+        """Download/load solar resource data
+
+        Args:
+            data (dict): Dictionary containing site-specific information.
+
+        Returns:
+            :obj:`hopp.simulation.technologies.resource.SolarResource` or :obj:`hopp.simulation.technologies.resource.HPCSolarData`: solar resource data class
+        """
+        if "solar_lat" in data and "solar_lon" in data:
+            solar_lat = data["solar_lat"]
+            solar_lon = data["solar_lon"]
+        else:
+            solar_lat = data["lat"]
+            solar_lon = data["lon"]
+
+        if "solar_year" in data:
+            solar_year = data["solar_year"]
+        else:
+            solar_year = data["year"]
+
+        if self.solar_resource is None:
+            if self.renewable_resource_origin=="API":
+                solar_resource = SolarResource(solar_lat, solar_lon, solar_year, path_resource=self.path_resource, filepath=self.solar_resource_file)
+            else:
+                solar_resource = HPCSolarData(solar_lat, solar_lon, solar_year,nsrdb_source_path = self.nsrdb_source_path, filepath=self.solar_resource_file)
+            return solar_resource
+        elif isinstance(self.solar_resource,dict):
+            solar_resource = SolarResource(solar_lat, solar_lon, solar_year,resource_data = self.solar_resource)
+            return solar_resource
+        else:
+            return self.solar_resource
+
+    def initialize_wind_resource(self,data:dict):
+        """Download/load wind resource data
+
+        Args:
+            data (dict): Dictionary containing site-specific information.
+
+        Returns:
+            :obj:`hopp.simulation.technologies.resource.WindResource` or :obj:`hopp.simulation.technologies.resource.HPCWindData`: wind resource data class
+        """
+        if "wind_lat" in data and "wind_lon" in data:
+            wind_lat = data["wind_lat"]
+            wind_lon = data["wind_lon"]
+        else:
+            wind_lat = data["lat"]
+            wind_lon = data["lon"]
+
+        if "wind_year" in data:
+            wind_year = data["wind_year"]
+        else:
+            wind_year = data["year"]
+        if self.wind_resource is None:
+            if self.renewable_resource_origin=="API":
+                wind_resource = WindResource(wind_lat, wind_lon, wind_year, wind_turbine_hub_ht=self.hub_height,
+                                            path_resource=self.path_resource, filepath=self.wind_resource_file, source=self.wind_resource_origin)
+            else:
+                wind_resource = HPCWindData(wind_lat, wind_lon, wind_year, wind_turbine_hub_ht=self.hub_height,
+                                                wtk_source_path=self.wtk_source_path, filepath=self.wind_resource_file)
+            return wind_resource
+        elif isinstance(self.wind_resource,dict):
+            wind_resource = WindResource(wind_lat, wind_lon, wind_year, wind_turbine_hub_ht=self.hub_height,resource_data = self.wind_resource)
+            return wind_resource
+        else:
+            return self.wind_resource
