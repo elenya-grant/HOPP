@@ -46,6 +46,8 @@ solar and storage.
 
     ```bash
     conda install -y -c conda-forge coin-or-cbc=2.10.8 glpk
+    
+    pip install turbine-models@git+https://github.com/elenya-grant/turbine-models.git@dev/package
     ```
 
     Note if you are on Windows, you will have to manually install Cbc: https://github.com/coin-or/Cbc.
