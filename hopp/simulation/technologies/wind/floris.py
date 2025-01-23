@@ -2,10 +2,13 @@
 from attrs import define, field
 from dataclasses import dataclass, asdict
 import csv
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, List, Union
 import numpy as np
 
 from floris import FlorisModel, TimeSeries
+from floris.core import Core
+from pathlib import Path
+from scipy.constants import R, g, convert_temperature
 
 from hopp.simulation.base import BaseClass
 from hopp.simulation.technologies.sites import SiteInfo
@@ -26,19 +29,34 @@ class Floris(BaseClass):
     _timestep: Tuple[int, int] = field(init=False)
     annual_energy_pre_curtailment_ac: float = field(init=False)
     fi: FlorisModel = field(init=False)
+    turbine_name: Union[str,List[str]] = field(init = False)
 
     def __attrs_post_init__(self):
         # floris_input_file = resource_file_converter(self.config["simulation_input_file"])
         floris_input_file = self.config.floris_config # DEBUG!!!!!
 
-        if floris_input_file is None:
+        if self.config.floris_config is None:
             raise ValueError("A floris configuration must be provided")
         if self.config.timestep is None:
             raise ValueError("A timestep is required.")
 
         # the above change is a temporary patch to bridge to refactor floris
+        if isinstance(self.config.floris_config,(str, Path)):
+            floris_config = Core.from_file(self.config.floris_config)
+        else:
+            floris_config = self.config.floris_config
+        
+        # if self.config.adjust_air_density_for_elevation and self.site.elev is not None:
+        #     rho = self.update_air_density_for_elevation()
+        #     floris_config["flow_field"].update({"air_density":rho})
 
-        self.fi = FlorisModel(floris_input_file)
+        self.fi = FlorisModel(floris_config)
+        turbine_names = list(self.fi.core.farm.turbine_power_thrust_tables.keys())
+        if len(turbine_names)>1:
+            self.turbine_name = turbine_names
+        else:
+            self.turbine_name = turbine_names[0]
+        # self.fi = FlorisModel(floris_input_file)
         self._timestep = self.config.timestep
         self._operational_losses = self.config.operational_losses
 
@@ -51,7 +69,14 @@ class Floris(BaseClass):
         self.turb_rating = self.config.turbine_rating_kw
         
         self.wind_turbine_rotor_diameter = self.fi.core.farm.rotor_diameters[0]
-        self.system_capacity = self.nTurbs * self.turb_rating
+        if isinstance(self.turbine_name,list):
+            system_capacity_kW = 0.0
+            for ti,td in enumerate(self.fi.core.farm.turbine_definitions):
+                system_capacity_kW += max(td["power_thrust_table"]["power"])
+            self.system_capacity = system_capacity_kW
+
+        else:
+            self.system_capacity = self.nTurbs * self.turb_rating
 
         # turbine power curve (array of kW power outputs)
         self.wind_turbine_powercurve_powerout = []
@@ -71,13 +96,29 @@ class Floris(BaseClass):
 
         self.initialize_from_floris()
 
+    def update_air_density_for_elevation(self):
+        rho0 = 1.225 #kg/m3 air density at sea level
+        t_ref = 20 # deg C
+        T_ref = convert_temperature([t_ref], "C", "K")[0]
+        h_ref = 0.0
+        l = 0.0065 # K/m - lapse null rate
+        # R_air = 287.05 #J/mol-K
+        molar_mass_air = 28.96 #g/mol
+        #https://en.wikipedia.org/wiki/Barometric_formula
+        e = g*(molar_mass_air/1e3)/(R*l)
+        rho = rho0*((T_ref - ((self.site.elev-h_ref)*l))/T_ref)**(e - 1)
+        return rho
+
     def initialize_from_floris(self):
         """
         Please populate all the wind farm parameters
         """
         self.nTurbs = len(self.fi.layout_x)
-        self.wind_turbine_powercurve_powerout = [1] * 30    # dummy for now
-        pass
+        if isinstance(self.turbine_name,str):
+            self.wind_turbine_powercurve_powerout = list(self.fi.core.farm.turbine_power_thrust_tables[self.turbine_name]["power"])
+        else:
+            self.wind_turbine_powercurve_powerout = [1] * 30    # dummy for now
+        
 
     def value(self, name: str, set_value=None):
         """
