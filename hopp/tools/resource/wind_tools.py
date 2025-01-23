@@ -1,4 +1,6 @@
 from scipy.constants import R, g, convert_temperature
+from hopp.simulation.technologies.resource import HPCWindData, WindResource
+from typing import Optional, Tuple, Union
 
 def calculate_air_density_for_elevation(elevation_m:float):
     """calculate air density based on site elevation using the Barometric formula.
@@ -8,7 +10,7 @@ def calculate_air_density_for_elevation(elevation_m:float):
         elevation_m (float): elevation of site in meters
 
     Returns:
-        rho (float): air density in kg/m3 at elevation of site
+        float: air density in kg/m3 at elevation of site
     """
     rho0 = 1.225 # air density at sea level (kg/m3)
     t_ref = 20 # standard air temperature (Celsius)
@@ -29,8 +31,32 @@ def calculate_air_density_for_elevation(elevation_m:float):
     return rho
 
 def calculate_elevation_air_density_losses(elevation_m:float):
-    rho0 = 1.225
-    air_density = calculate_air_density_for_elevation(elevation_m)
-    loss_ratio = 1 - (air_density/rho0)
-    loss_percent = loss_ratio*100
+    """Calculate loss (%) from air density drop at site elevation.
+
+    Args:
+        elevation_m (float): site elevation in meters
+
+    Returns:
+        float: percentage loss associated with air density decrease at elevation.
+    """
+
+    if elevation_m<0.0:
+        loss_percent = 0.0
+    else:
+        rho0 = 1.225
+        air_density = calculate_air_density_for_elevation(elevation_m)
+        loss_ratio = 1 - (air_density/rho0)
+        loss_percent = loss_ratio*100
+
     return loss_percent
+
+def parse_wind_resource_data():
+    pass
+
+def find_most_frequent_wind_direction(wind_resource: Union[HPCWindData,WindResource]):
+    wind_resource.data
+    pass
+
+def find_most_frequent_wind_direction(wind_resource: Union[HPCWindData,WindResource]):
+    wind_resource.data
+    pass
