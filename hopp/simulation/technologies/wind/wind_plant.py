@@ -23,14 +23,15 @@ class WindConfig(BaseClass):
     Configuration class for WindPlant.
 
     Args:
-        num_turbines: number of turbines in the farm
-        turbine_rating_kw: turbine rating
-        rotor_diameter: turbine rotor diameter
-        hub_height: turbine hub height
+        num_turbines (int): number of turbines in the farm
+        turbine_rating_kw (float): turbine rating in kW
+        rotor_diameter (float): turbine rotor diameter in meters
+        hub_height (float): turbine hub height in meters
         layout_mode:
             - 'boundarygrid': regular grid with boundary turbines, requires WindBoundaryGridParameters as 'params'
             - 'grid': regular grid with dx, dy distance, 0 angle; does not require 'params'
-        model_name: which model to use. Options are 'floris' and 'pysam'
+            - 'basicgrid'
+        model_name (str): which model to use. Options are 'floris' and 'pysam'
         model_input_file: file specifying a full PySAM input
         layout_params: layout configuration
         rating_range_kw: allowable kw range of turbines, default is 1000 - 3000 kW
@@ -55,8 +56,9 @@ class WindConfig(BaseClass):
     model_input_file: Optional[str] = field(default=None)
     rating_range_kw: Tuple[int, int] = field(default=(1000, 3000))
     floris_config: Optional[Union[dict, str, Path]] = field(default=None)
+    adjust_air_density_for_elevation: Optional[bool] = field(default = False)
     operational_losses: float = field(default = 12.83, validator=range_val(0, 100))
-    timestep: Optional[Tuple[int, int]] = field(default=None)
+    timestep: Optional[Tuple[int, int]] = field(default=(0,8760))
     fin_model: Optional[Union[dict, FinancialModelType]] = field(default=None)
     name: str = field(default="WindPlant")
 
