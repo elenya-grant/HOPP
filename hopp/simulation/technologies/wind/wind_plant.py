@@ -12,7 +12,7 @@ from hopp.utilities.validators import gt_zero, contains, range_val
 from hopp.simulation.technologies.wind.floris import Floris
 from hopp.simulation.technologies.power_source import PowerSource
 from hopp.simulation.technologies.sites import SiteInfo
-from hopp.simulation.technologies.layout.wind_layout import WindLayout, WindBoundaryGridParameters
+from hopp.simulation.technologies.layout.wind_layout import WindLayout, WindBoundaryGridParameters, WindBasicGridParameters
 from hopp.simulation.technologies.financial import CustomFinancialModel, FinancialModelType
 from hopp.utilities.log import hybrid_logger as logger
 
@@ -31,6 +31,11 @@ class WindConfig(BaseClass):
             - 'boundarygrid': regular grid with boundary turbines, requires WindBoundaryGridParameters as 'params'
             - 'grid': regular grid with dx, dy distance, 0 angle; does not require 'params'
             - 'basicgrid'
+                default 5x5 square and default with no row-phase offset
+                constrain_by_site_boundaries: default to False
+                more important to know that you have the number of turbines you expect
+                and its in a layout you'd expect.
+                
         model_name (str): which model to use. Options are 'floris' and 'pysam'
         model_input_file: file specifying a full PySAM input
         layout_params: layout configuration
@@ -49,14 +54,28 @@ class WindConfig(BaseClass):
     num_turbines: int = field(validator=gt_zero)
     turbine_rating_kw: float = field(validator=gt_zero)
     rotor_diameter: Optional[float] = field(default=None)
-    layout_params: Optional[Union[dict, WindBoundaryGridParameters]] = field(default=None)
+    layout_params: Optional[Union[dict, WindBoundaryGridParameters, WindBasicGridParameters]] = field(default=None)
     hub_height: Optional[float] = field(default=None)
-    layout_mode: str = field(default="grid", validator=contains(["boundarygrid", "grid"]))
+    layout_mode: str = field(default="grid", validator=contains(["boundarygrid", "grid","basicgrid","custom"]))
     model_name: str = field(default="pysam", validator=contains(["pysam", "floris"]))
     model_input_file: Optional[str] = field(default=None)
     rating_range_kw: Tuple[int, int] = field(default=(1000, 3000))
     floris_config: Optional[Union[dict, str, Path]] = field(default=None)
     adjust_air_density_for_elevation: Optional[bool] = field(default = False)
+    turbine_name: Optional[str] = field(default = None)
+    use_turbine_lib: Optional[bool] = field(default = False)
+    turbine_management: Optional[dict] = field(default = None)
+    """
+    power_curve_filename #pysam
+    turbine_name
+        - floris turbines
+        - turbine library turbines
+        - or custom turbine - requires another input (or at least - requires hopp inputs filled out)
+            - require at least a power/wind-speed curve or throw warning that using pysam
+    power_curve_dir
+    save_turbine_file # save power curve as csv if pysam, same as floris yaml if floris
+    """
+    # layout_management
     operational_losses: float = field(default = 12.83, validator=range_val(0, 100))
     timestep: Optional[Tuple[int, int]] = field(default=(0,8760))
     fin_model: Optional[Union[dict, FinancialModelType]] = field(default=None)
@@ -129,10 +148,32 @@ class WindPlant(PowerSource):
             else:
                 financial_model = self.import_financial_model(financial_model, system_model, self.config_name)
 
-        if isinstance(self.config.layout_params, dict):
-            layout_params = WindBoundaryGridParameters(**self.config.layout_params)
+        # check layout parameters
+        if self.config.layout_mode=="basicgrid":
+            if isinstance(self.config.layout_mode,dict):
+                layout_params = WindBasicGridParameters(**self.config.layout_params)
+            elif self.config.layout_params is None:
+                layout_params = WindBasicGridParameters()
+            elif isinstance(self.config.layout_params,WindBasicGridParameters):
+                layout_params = self.config.layout_params
+        elif self.config.layout_mode=="boundarygrid":
+            if isinstance(self.config.layout_params, dict):
+                layout_params = WindBoundaryGridParameters(**self.config.layout_params)
+            elif isinstance(self.config.layout_params,WindBoundaryGridParameters):
+                layout_params = self.config.layout_params
+            else:
+                raise ValueError("for layout_mode='boundarygrid', layout_params is required")
+        elif self.config.layout_mode == "custom":
+            pass
+        elif self.config.layout_mode== "grid":
+            pass
         else:
+            # NOTE: possibly should raise value error here
             layout_params = self.config.layout_params
+        # if isinstance(self.config.layout_params, dict):
+        #     layout_params = WindBoundaryGridParameters(**self.config.layout_params)
+        # else:
+        #     layout_params = self.config.layout_params
 
         super().__init__("WindPlant", self.site, system_model, financial_model)
         self._system_model.value("wind_resource_data", self.site.wind_resource.data)

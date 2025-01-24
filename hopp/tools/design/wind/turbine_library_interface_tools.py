@@ -1,7 +1,7 @@
 from turbine_models.parser import Turbines
 import PySAM.Windpower as Windpower
 import PySAM.Singleowner as Singleowner
-from hopp.simulation.technologies.wind import WindPlant
+# from hopp.simulation.technologies.wind import WindPlant
 import hopp.tools.design.wind.power_curve_tools as curve_tools
 from hopp.utilities.log import hybrid_logger as logger
 import numpy as np
@@ -34,7 +34,7 @@ def check_hub_height(turbine_specs,wind_plant):
     return hub_height
 
 
-def set_pysam_turbine_specs(turbine_name,wind_plant:WindPlant):
+def set_pysam_turbine_specs(turbine_name,wind_plant):#:WindPlant):
     t_lib = Turbines()
     turbine_specs = t_lib.specs(turbine_name)
     if isinstance(turbine_specs,dict):
@@ -61,7 +61,7 @@ def set_pysam_turbine_specs(turbine_name,wind_plant:WindPlant):
         raise ValueError(f"turbine {turbine_name} is missing some data, please try another turbines")
     return wind_plant, turbine_dict
 
-def set_floris_turbine_specs(turbine_name,wind_plant:WindPlant):
+def set_floris_turbine_specs(turbine_name,wind_plant): #:WindPlant):
     t_lib = Turbines()
     turbine_specs = t_lib.specs(turbine_name)
     if isinstance(turbine_specs,dict):
@@ -106,7 +106,8 @@ def set_floris_turbine_specs(turbine_name,wind_plant:WindPlant):
         }
         
         #floris_config["farm"]["turbine_type"][0]
-        wind_plant.fi.set(turbine_type=[turbine_dict])
+        if wind_plant.__getattribute__("fi") is not None:
+            wind_plant.fi.set(turbine_type=[turbine_dict])
     else:
         raise ValueError(f"turbine {turbine_name} is missing some data, please try another turbines")
     return wind_plant, turbine_dict

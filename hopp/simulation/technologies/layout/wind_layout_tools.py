@@ -302,3 +302,6 @@ def make_site_boundary_for_square_grid_layout(n_turbs,rotor_diam,row_spacing,tur
     verts = [p0,p1,p2,p3]
     return {"site_boundaries":{"verts":verts,"verts_simple":verts}}
 
+if __name__=="__main__":
+    x,y = find_most_square_layout_dimensions(20)
+    []

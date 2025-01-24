@@ -13,7 +13,8 @@ from scipy.constants import R, g, convert_temperature
 from hopp.simulation.base import BaseClass
 from hopp.simulation.technologies.sites import SiteInfo
 from hopp.type_dec import resource_file_converter
-
+from hopp.tools.design.wind.turbine_library_interface_tools import set_floris_turbine_specs
+from hopp.tools.resource.wind_tools import calculate_air_density_for_elevation
 # avoid circular dep
 if TYPE_CHECKING:
     from hopp.simulation.technologies.wind.wind_plant import WindConfig
@@ -46,10 +47,19 @@ class Floris(BaseClass):
         else:
             floris_config = self.config.floris_config
         
-        # if self.config.adjust_air_density_for_elevation and self.site.elev is not None:
-        #     rho = self.update_air_density_for_elevation()
-        #     floris_config["flow_field"].update({"air_density":rho})
+        if self.config.adjust_air_density_for_elevation and self.site.elev is not None:
+            rho = calculate_air_density_for_elevation(self.site.elev)
+            floris_config["flow_field"].update({"air_density":rho})
+        
+        if self.config.use_turbine_lib and self.config.turbine_name is not None:
+            floris_config = self.update_floris_config_from_turb_lib(floris_config)
 
+        #1 check for floris layout
+        #2 check that floris layout is for the right number of turbines
+            # if not - then either print warning to logger and go with default layout
+            # or raise warning
+        # specify that hopp config has priority over floris config
+        # hopp is highest level
         self.fi = FlorisModel(floris_config)
         turbine_names = list(self.fi.core.farm.turbine_power_thrust_tables.keys())
         if len(turbine_names)>1:
@@ -69,7 +79,7 @@ class Floris(BaseClass):
         self.turb_rating = self.config.turbine_rating_kw
         
         self.wind_turbine_rotor_diameter = self.fi.core.farm.rotor_diameters[0]
-        if isinstance(self.turbine_name,list):
+        if isinstance(turbine_names,list):
             system_capacity_kW = 0.0
             for ti,td in enumerate(self.fi.core.farm.turbine_definitions):
                 system_capacity_kW += max(td["power_thrust_table"]["power"])
@@ -95,6 +105,11 @@ class Floris(BaseClass):
         self.capacity_factor = None
 
         self.initialize_from_floris()
+    
+    def update_floris_config_from_turb_lib(self,floris_config):
+        wind_plant, turbine_dict = set_floris_turbine_specs(self.turbine_name,self)
+        floris_config["farm"]["turbine_type"][0] = turbine_dict
+        return floris_config
 
     def update_air_density_for_elevation(self):
         rho0 = 1.225 #kg/m3 air density at sea level

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, Point, MultiPolygon
 from shapely.affinity import scale
 import PySAM.Windpower as windpower
+from floris import FlorisModel
 
 from hopp.utilities.log import hybrid_logger as logger
 from hopp.simulation.technologies.layout.wind_layout_tools import (
@@ -22,12 +23,11 @@ from hopp.utilities.validators import gt_zero, contains, range_val
 
 @define
 class WindBasicGridParameters:
-    row_D_spacing: float
-    turbine_D_spacing: float
+    row_D_spacing: Optional[float] = field(default = 5.0)
+    turbine_D_spacing: Optional[float ]= field(default = 5.0)
     grid_angle: Optional[float] = field(default = 0.0)
-    row_phase_offset: Optional[float] = field(default = 0.5, validator=range_val(0.0, 1.0))
-    make_most_square: Optional[bool] = field(default = False)
-    site_boundary_constrained: Optional[bool] = field(default = True)
+    row_phase_offset: Optional[float] = field(default = 0.0, validator=range_val(0.0, 1.0))
+    site_boundary_constrained: Optional[bool] = field(default = False)
 
 
 class WindBoundaryGridParameters(NamedTuple):
@@ -60,7 +60,7 @@ class WindLayout:
     """
     def __init__(self,
                  site_info: SiteInfo,
-                 wind_source: windpower.Windpower,
+                 wind_source: Union[windpower.Windpower,FlorisModel,dict],
                  layout_mode: str,
                  parameters: Union[WindBoundaryGridParameters, WindCustomParameters, None, WindBasicGridParameters],
                  min_spacing: float = 200.,
@@ -69,11 +69,13 @@ class WindLayout:
 
         """
         self.site: SiteInfo = site_info
+
+        #update _system_model to be also floris
         self._system_model: windpower.Windpower = wind_source
         self.min_spacing = max(min_spacing, self._system_model.value("wind_turbine_rotor_diameter") * 2)
 
-        if layout_mode not in ('boundarygrid', 'grid', 'custom'):
-            raise ValueError('Options for `layout_mode` are: "boundarygrid", "grid", "custom"')
+        if layout_mode not in ('boundarygrid', 'grid', 'custom','basicgrid'):
+            raise ValueError('Options for `layout_mode` are: "boundarygrid", "grid", "custom", "basicgrid"')
         self._layout_mode = layout_mode
 
         # layout design parameters
@@ -253,3 +255,4 @@ class WindLayout:
             axes.add_patch(circle)
 
         return figure, axes
+
