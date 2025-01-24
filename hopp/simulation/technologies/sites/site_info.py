@@ -86,7 +86,8 @@ class SiteInfo(BaseClass):
         - site_boundaries (*dict,optional*):
             - **verts** (*list[list[float]]*): vertices of site polygon. list of [x,y] coordinates in meters.
         - site_details (*dict, optional*):
-            - **site_area_m2** (*float*): area of site in square meters
+            - **site_area_m2** (*float*): area of site in square meters.
+            - **site_area_km2** (*float*): area of site in square kilometers. required if ``site_area_m2`` is not provided.
             - **site_shape** (*str, optional*): shape of site area. Options are "circle", "rectangle", "square" or "hexagon". Defaults to "square".
             - **aspect_ratio** (*float, optional*): aspect ratio (width/height) if ``site_shape`` is set as "rectangle". Defaults to 1.5.
             - **x0** (*float, optional*): left-most x coordinate of the site in meters. Defaults to 0.0.
@@ -169,7 +170,9 @@ class SiteInfo(BaseClass):
                 self.vertices = np.array([np.array(v) for v in data['site_boundaries']['verts']])
                 self.polygon = Polygon(self.vertices)
         elif 'site_details' in data:
-            if 'site_area_m2' in data["site_details"]:
+            if 'site_area_m2' in data["site_details"] or 'site_area_km2' in data["site_details"]:
+                if 'site_area_km2' in data["site_details"]:
+                    data["site_details"].update({"site_area_m2":data["site_details"]["site_area_km2"]*1e6})
                 if 'site_shape' not in data["site_details"]:
                     data["site_details"].update({"site_shape":"square"})
                 if "x0" not in data["site_details"]:
