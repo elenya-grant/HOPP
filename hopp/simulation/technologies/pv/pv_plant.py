@@ -261,21 +261,21 @@ class PVPlant(PowerSource):
 
     @property
     def capacity_factor(self) -> float:
-        """System capacity factor [%]"""
+        """System AC capacity factor [%]"""
         if self.system_capacity_kw > 0:
             return self._system_model.value("capacity_factor")*self._system_model.value("dc_ac_ratio")
         else:
             return 0
     @property
     def capacity_factor_ac(self) -> float:
-        """System capacity factor [%]"""
+        """System AC capacity factor [%]"""
         if self.system_capacity_kw > 0:
             return self._system_model.value("capacity_factor_ac")
         else:
             return 0
     @property
     def capacity_factor_dc(self) -> float:
-        """System capacity factor [%]"""
+        """System DC capacity factor [%]"""
         if self.system_capacity_kw > 0:
             return self._system_model.value("capacity_factor")
         else:
@@ -283,7 +283,7 @@ class PVPlant(PowerSource):
     @property
     def panel_tilt_angle(self):
         """Tilt angle"""
-        return self._system_model.SystemDesign.tilt
+        return self._system_model.value("tilt")
         ### Use this version when updated to PySAM 4.2.0
         # if self.system_capacity_kw > 0:
         #     return self._system_model.value("capacity_factor_ac")
