@@ -4,22 +4,22 @@ from dataclasses import dataclass, asdict
 import csv
 from typing import TYPE_CHECKING, Tuple, List, Union
 import numpy as np
-
+import os
 from floris import FlorisModel, TimeSeries
 from floris.core import Core
 from pathlib import Path
 from scipy.constants import R, g, convert_temperature
-
+from hopp.utilities import load_yaml
 from hopp.simulation.base import BaseClass
 from hopp.simulation.technologies.sites import SiteInfo
 from hopp.type_dec import resource_file_converter
 from hopp.tools.design.wind.turbine_library_interface_tools import set_floris_turbine_specs
-from hopp.tools.resource.wind_tools import calculate_air_density_for_elevation
+from hopp.tools.resource.wind_tools import calculate_air_density_for_elevation, parse_resource_data
 # avoid circular dep
 if TYPE_CHECKING:
     from hopp.simulation.technologies.wind.wind_plant import WindConfig
-
-
+import hopp.tools.design.wind.floris_helper_tools as fi_tools
+from hopp import ROOT_DIR
 @define
 class Floris(BaseClass):
     site: SiteInfo = field()
@@ -36,30 +36,47 @@ class Floris(BaseClass):
         # floris_input_file = resource_file_converter(self.config["simulation_input_file"])
         floris_input_file = self.config.floris_config # DEBUG!!!!!
 
+        # 1) check that floris config is provided
         if self.config.floris_config is None:
             raise ValueError("A floris configuration must be provided")
         if self.config.timestep is None:
             raise ValueError("A timestep is required.")
 
-        # the above change is a temporary patch to bridge to refactor floris
+        # 2) load floris config if needed
         if isinstance(self.config.floris_config,(str, Path)):
-            floris_config = Core.from_file(self.config.floris_config)
+            # floris_config = Core.from_file(self.config.floris_config)
+            floris_config = load_yaml(self.config.floris_config)
         else:
             floris_config = self.config.floris_config
         
+        # 3) modify air density in floris config if needed
         if self.config.adjust_air_density_for_elevation and self.site.elev is not None:
             rho = calculate_air_density_for_elevation(self.site.elev)
             floris_config["flow_field"].update({"air_density":rho})
+            # self.fi.set_(air_density = rho)
         
+        # 4) update turbine in floris file if using turbine library
         if self.config.use_turbine_lib and self.config.turbine_name is not None:
+            self.turbine_name = self.config.turbine_name
             floris_config = self.update_floris_config_from_turb_lib(floris_config)
 
-        #1 check for floris layout
-        #2 check that floris layout is for the right number of turbines
+        # 5) check for floris layout and check that floris layout is for the right number of turbines
+        make_layout = self.check_for_layout(floris_config)
+        if make_layout:
+            if self.config.layout_mode == "basicgrid" and self.config.layout_params is not None:
+                layout_params = self.config.layout_params
+            else:
+                layout_params = None
+            rotor_diam = floris_config["farm"]["turbine_type"][0]["rotor_diameter"]
+            x_pos, y_pos = fi_tools.make_default_layout(self.config.num_turbines,rotor_diam,layout_params,site = self.site)
+            floris_config["farm"].update({"layout_x":x_pos,"layout_y":y_pos})
+        
             # if not - then either print warning to logger and go with default layout
             # or raise warning
         # specify that hopp config has priority over floris config
         # hopp is highest level
+        self.export_floris_files(floris_config)
+        # 6) initialize floris model
         self.fi = FlorisModel(floris_config)
         turbine_names = list(self.fi.core.farm.turbine_power_thrust_tables.keys())
         if len(turbine_names)>1:
@@ -71,7 +88,7 @@ class Floris(BaseClass):
         self._operational_losses = self.config.operational_losses
 
         self.wind_resource_data = self.site.wind_resource.data
-        self.speeds, self.wind_dirs = self.parse_resource_data()
+        self.speeds, self.wind_dirs = parse_resource_data(self.site.wind_resource)
 
         self.wind_farm_xCoordinates = self.fi.layout_x
         self.wind_farm_yCoordinates = self.fi.layout_y
@@ -109,20 +126,27 @@ class Floris(BaseClass):
     def update_floris_config_from_turb_lib(self,floris_config):
         wind_plant, turbine_dict = set_floris_turbine_specs(self.turbine_name,self)
         floris_config["farm"]["turbine_type"][0] = turbine_dict
-        return floris_config
+        if "turbine_type" in floris_config["farm"]:
+            if floris_config["farm"]["turbine_type"] is None:
+                floris_config["farm"].update({"turbine_type":[turbine_dict]})
+            elif isinstance(floris_config["farm"]["turbine_type"],list):
+                if isinstance(floris_config["farm"]["turbine_type"][0],dict):
+                    for key,val in turbine_dict.items():
+                        if key in floris_config["farm"]["turbine_type"][0]:
+                            if floris_config["farm"]["turbine_type"][0][key] is not None:
+                                turbine_dict.update({key:floris_config["farm"]["turbine_type"][0][key]})
+                else:
+                    floris_config["farm"]["turbine_type"][0] = turbine_dict
+            else:
+                floris_config["farm"]["turbine_type"] = [turbine_dict]
+        else:
+            floris_config["farm"].update({"turbine_type":[turbine_dict]})
 
-    def update_air_density_for_elevation(self):
-        rho0 = 1.225 #kg/m3 air density at sea level
-        t_ref = 20 # deg C
-        T_ref = convert_temperature([t_ref], "C", "K")[0]
-        h_ref = 0.0
-        l = 0.0065 # K/m - lapse null rate
-        # R_air = 287.05 #J/mol-K
-        molar_mass_air = 28.96 #g/mol
-        #https://en.wikipedia.org/wiki/Barometric_formula
-        e = g*(molar_mass_air/1e3)/(R*l)
-        rho = rho0*((T_ref - ((self.site.elev-h_ref)*l))/T_ref)**(e - 1)
-        return rho
+        # self.config.turbine_rating_kw = turbine_dict.pop("turbine_rating")
+        self.turbine_rating = turbine_dict.pop("turbine_rating")
+        self.config.rotor_diameter = turbine_dict["rotor_diameter"]
+        self.config.hub_height = turbine_dict["hub_height"]
+        return floris_config
 
     def initialize_from_floris(self):
         """
@@ -143,30 +167,49 @@ class Floris(BaseClass):
             self.__setattr__(name, set_value)
         else:
             return self.__getattribute__(name)
-
-    def parse_resource_data(self):
-
-        # extract data for simulation
-        speeds = np.zeros(len(self.wind_resource_data['data']))
-        wind_dirs = np.zeros(len(self.site.wind_resource.data['data']))
-        data_rows_total = 4
-        if np.shape(self.site.wind_resource.data['data'])[1] > data_rows_total:
-            height_entries = int(np.round(np.shape(self.site.wind_resource.data['data'])[1]/data_rows_total))
-            data_entries = np.empty((height_entries))
-            for j in range(height_entries):
-                data_entries[j] = int(j*data_rows_total)
-            data_entries = data_entries.astype(int)
-            for i in range((len(self.site.wind_resource.data['data']))):
-                data_array = np.array(self.site.wind_resource.data['data'][i])
-                speeds[i] = np.mean(data_array[2+data_entries])
-                wind_dirs[i] = np.mean(data_array[3+data_entries])
+    
+    def set_floris_value(self,name,value):
+        self.fi.set(**{name:value})
+    
+    def check_floris_turbine_library(self,turbine_name):
+        from floris import turbine_library
+        floris_turb_lib_files = os.listdir(turbine_library.__path__)
+        floris_turb_lib_files = [f for f in floris_turb_lib_files if ".yaml" in f]
+        if any(k.split(".yaml")[0]==turbine_name for k in floris_turb_lib_files):
+            turb_filepath = os.path.join(turbine_library.__path__,f"{turbine_name}.yaml")
+            turbine_model = load_yaml(turb_filepath)
         else:
-            for i in range((len(self.site.wind_resource.data['data']))):
-                speeds[i] = self.site.wind_resource.data['data'][i][2]
-                wind_dirs[i] = self.site.wind_resource.data['data'][i][3]
+            turbine_model = None
+        return turbine_model
 
-        return speeds, wind_dirs
+    def make_wind_rose(self,output_dir):
+        import matplotlib.pyplot as plt
+        time_series = TimeSeries(
+            wind_directions=self.wind_dirs[self.start_idx:self.end_idx],
+            wind_speeds=self.speeds[self.start_idx:self.end_idx],
+            turbulence_intensities=self.fi.core.flow_field.turbulence_intensities[0]
+        )
+        vmin = 2.0
+        vmax = np.ceil(max(self.speeds))
+        dv = 2.0 #(vmax-vmin)/10
+        wind_rose = time_series.to_WindRose(wd_edges=np.arange(0, 360, 3.0), ws_edges=np.arange(vmin, vmax, dv))
+        # fig,ax = plt.subplots(1,1)
+        # fig,ax1 = plt.subplots(1,2)
+        fig, ax = plt.subplots(subplot_kw={"polar": True})
+        # fig = plt.figure()
+        # ax1 = fig.add_subplot(1, 1, 1)
+        hub_ht = int(self.site.wind_resource.hub_height_meters)
+        wind_rose.plot(ax=ax,legend_kwargs={"label": f"Wind Speed (m/s) at {hub_ht} m"})
+        # wr1 = ax.figure.axes[0]
+        # wr2 = ax.figure.axes[1]
+        # wr1.set_figure(ax1[0].get_figure())
+        # wr2.set_figure(ax1[1].get_figure())
 
+        # ax.set_figure(ax1.get_figure())
+        fig_path = os.path.join(output_dir,f"wind_rose_{self.site.wind_resource.latitude}_{self.site.wind_resource.longitude}_{self.site.wind_resource.year}_{hub_ht}m.png")
+        fig.savefig(fig_path)
+        # fig.savefig(fig_path,bbox_inches="tight")
+        plt.close()
     def execute(self, project_life):
         
         if self.verbose:
@@ -207,3 +250,48 @@ class Floris(BaseClass):
             'annual_energy': self.annual_energy,
         }
         return config
+
+    def check_for_layout(self,floris_config):
+        make_layout = True
+        if "farm" in floris_config:
+            if "layout_x" in floris_config["farm"] and "layout_y" in floris_config["farm"]:
+                if len(floris_config["farm"]["layout_x"]) == self.config.num_turbines:
+                    make_layout = False
+                else:
+                    if self.verbose:
+                        layout_n_turbs = len(floris_config["farm"]["layout_x"])
+                        print(f"provided layout has {layout_n_turbs} turbines but user-requests {self.config.num_turbines} turbines, making default layout for {self.config.num_turbines} turbines")
+        return make_layout
+    
+    def check_valid_output_dir(self,output_dir):
+        if output_dir is None:
+            output_dir = os.path.join(str(ROOT_DIR),"turbine_files")
+        if not os.path.isdir(output_dir):
+            # check same root path as HOPP ROOT
+            machine_root = "/" + "/".join(k for k in ROOT_DIR.parts[:3] if k!="/")
+            if machine_root in output_dir:
+                os.makedirs(output_dir)
+            else:
+                output_dir = os.path.join(str(ROOT_DIR),"turbine_files")
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
+        return output_dir
+
+    def export_floris_files(self,floris_config):
+        if self.config.turbine_management is not None:
+            if "output_dir" in self.config.turbine_management:
+                output_dir = self.check_valid_output_dir(self.config.turbine_management["output_dir"])
+            else:
+                output_dir = self.check_valid_output_dir(None)
+            if "export_turbine_design" in self.config.turbine_management:
+                if self.config.turbine_management["export_turbine_design"]:
+                    turbine_dict = floris_config["farm"]["turbine_type"][0]
+                    fi_tools.write_turbine_to_floris_file(turbine_dict,output_dir)
+            if "export_layout" in self.config.turbine_management:
+                if self.config.turbine_management["export_layout"]:
+                    # turbine_name = floris_config["farm"]["turbine_type"][0]["turbine_type"]
+                    fi_tools.write_floris_layout_to_file(
+                        floris_config["farm"]["layout_x"],
+                        floris_config["farm"]["layout_y"],
+                        output_dir,
+                        self.turbine_name)

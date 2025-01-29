@@ -1,6 +1,7 @@
 from scipy.constants import R, g, convert_temperature
 from hopp.simulation.technologies.resource import HPCWindData, WindResource
 from typing import Optional, Tuple, Union
+import numpy as np
 
 def calculate_air_density_for_elevation(elevation_m:float):
     """calculate air density based on site elevation using the Barometric formula.
@@ -60,3 +61,25 @@ def find_most_frequent_wind_direction(wind_resource: Union[HPCWindData,WindResou
 def find_most_frequent_wind_direction(wind_resource: Union[HPCWindData,WindResource]):
     wind_resource.data
     pass
+
+def parse_resource_data(wind_resource):
+
+    speeds = np.zeros(len(wind_resource.data['data']))
+    wind_dirs = np.zeros(len(wind_resource.data['data']))
+    data_rows_total = 4
+    if np.shape(wind_resource.data['data'])[1] > data_rows_total:
+        height_entries = int(np.round(np.shape(wind_resource.data['data'])[1]/data_rows_total))
+        data_entries = np.empty((height_entries))
+        for j in range(height_entries):
+            data_entries[j] = int(j*data_rows_total)
+        data_entries = data_entries.astype(int)
+        for i in range((len(wind_resource.data['data']))):
+            data_array = np.array(wind_resource.data['data'][i])
+            speeds[i] = np.mean(data_array[2+data_entries])
+            wind_dirs[i] = np.mean(data_array[3+data_entries])
+    else:
+        for i in range((len(wind_resource.data['data']))):
+            speeds[i] = wind_resource.data['data'][i][2]
+            wind_dirs[i] = wind_resource.data['data'][i][3]
+
+    return speeds, wind_dirs

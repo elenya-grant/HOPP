@@ -12,7 +12,7 @@ from hopp.utilities.validators import gt_zero, contains, range_val
 from hopp.simulation.technologies.wind.floris import Floris
 from hopp.simulation.technologies.power_source import PowerSource
 from hopp.simulation.technologies.sites import SiteInfo
-from hopp.simulation.technologies.layout.wind_layout import WindLayout, WindBoundaryGridParameters, WindBasicGridParameters
+from hopp.simulation.technologies.layout.wind_layout import WindLayout, WindBoundaryGridParameters, WindBasicGridParameters, WindCustomParameters
 from hopp.simulation.technologies.financial import CustomFinancialModel, FinancialModelType
 from hopp.utilities.log import hybrid_logger as logger
 
@@ -56,7 +56,7 @@ class WindConfig(BaseClass):
     rotor_diameter: Optional[float] = field(default=None)
     layout_params: Optional[Union[dict, WindBoundaryGridParameters, WindBasicGridParameters]] = field(default=None)
     hub_height: Optional[float] = field(default=None)
-    layout_mode: str = field(default="grid", validator=contains(["boundarygrid", "grid","basicgrid","custom"]))
+    layout_mode: str = field(default="basicgrid", validator=contains(["boundarygrid", "grid","basicgrid","custom"]))
     model_name: str = field(default="pysam", validator=contains(["pysam", "floris"]))
     model_input_file: Optional[str] = field(default=None)
     rating_range_kw: Tuple[int, int] = field(default=(1000, 3000))
@@ -65,9 +65,15 @@ class WindConfig(BaseClass):
     turbine_name: Optional[str] = field(default = None)
     use_turbine_lib: Optional[bool] = field(default = False)
     turbine_management: Optional[dict] = field(default = None)
-    """
-    power_curve_filename #pysam
-    turbine_name
+    """dictionary of turbine management info such as:
+        
+        - power_curve_filename (str):
+        - ?turbine_name (str):
+        - ?use_turbine_lib (bool):
+        - export_turbine_design (bool):
+        - export_layout (bool)
+        - output_dir (str): filepath to export files to if enabled. 
+        --- below is undecided ---
         - floris turbines
         - turbine library turbines
         - or custom turbine - requires another input (or at least - requires hopp inputs filled out)
@@ -150,7 +156,7 @@ class WindPlant(PowerSource):
 
         # check layout parameters
         if self.config.layout_mode=="basicgrid":
-            if isinstance(self.config.layout_mode,dict):
+            if isinstance(self.config.layout_params,dict):
                 layout_params = WindBasicGridParameters(**self.config.layout_params)
             elif self.config.layout_params is None:
                 layout_params = WindBasicGridParameters()
@@ -164,9 +170,14 @@ class WindPlant(PowerSource):
             else:
                 raise ValueError("for layout_mode='boundarygrid', layout_params is required")
         elif self.config.layout_mode == "custom":
-            pass
+            if isinstance(self.config.layout_params,dict):
+                layout_params = WindCustomParameters(**self.config.layout_params)
+            elif isinstance(self.config.layout_params,WindCustomParameters):
+                layout_params = self.config.layout_params
+            else:
+                raise ValueError("for layout_mode='custom', layout_params is required")
         elif self.config.layout_mode== "grid":
-            pass
+            layout_params = self.config.layout_params
         else:
             # NOTE: possibly should raise value error here
             layout_params = self.config.layout_params
@@ -178,14 +189,18 @@ class WindPlant(PowerSource):
         super().__init__("WindPlant", self.site, system_model, financial_model)
         self._system_model.value("wind_resource_data", self.site.wind_resource.data)
 
-        self._layout = WindLayout(self.site, system_model, self.config.layout_mode, layout_params)
-
+        if self.config.model_name=="pysam":
+            self._layout = WindLayout(self.site, system_model, self.config.layout_mode, layout_params)
+        else:
+            floris_layout = {"layout_x":list(self._system_model.fi.layout_x),"layout_y":list(self._system_model.fi.layout_x)}
+            layout_params = WindCustomParameters(**floris_layout)
+            self._layout = WindLayout(self.site, system_model, "custom", layout_params)
         self._dispatch = None
 
         self.turb_rating = self.config.turbine_rating_kw
         self.num_turbines = self.config.num_turbines
 
-        if self.config.hub_height is not None:
+        if self.config.hub_height is not None and self.config.model_name=="pysam":
             self._system_model.Turbine.wind_turbine_hub_ht = self.config.hub_height
         if self.config.rotor_diameter is not None:
             self.rotor_diameter = self.config.rotor_diameter

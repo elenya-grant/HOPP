@@ -302,6 +302,45 @@ def make_site_boundary_for_square_grid_layout(n_turbs,rotor_diam,row_spacing,tur
     verts = [p0,p1,p2,p3]
     return {"site_boundaries":{"verts":verts,"verts_simple":verts}}
 
-if __name__=="__main__":
-    x,y = find_most_square_layout_dimensions(20)
-    []
+def constrain_layout_for_site(layout_x,layout_y,site_boundaries:BaseGeometry):
+    x_coords = []
+    y_coords = []
+    for x,y in zip(layout_x,layout_y):
+        if site_boundaries.contains(Point(x,y)):
+            x_coords.append(x)
+            y_coords.append(y)
+    if len(x_coords) != len(layout_x):
+        site_x,site_y = site_boundaries.exterior.xy
+        x_shift = 0
+        y_shift = 0
+        if min(layout_x)<min(site_x):
+            x_shift = min(site_x) - min(layout_x)
+        if min(layout_y)<min(site_y):
+            y_shift = min(site_y) - min(layout_y)
+        if x_shift==0 and y_shift == 0:
+            return x_coords,y_coords
+        else:
+            x_coords2 = []
+            y_coords2 = []
+            for x0,y0 in zip(layout_x,layout_y):
+                x = x0 + x_shift
+                y = y0 + y_shift
+                if site_boundaries.contains(Point(x,y)):
+                    x_coords2.append(x)
+                    y_coords2.append(y)
+            if len(x_coords2)>len(x_coords):
+                return x_coords2,y_coords2
+            else:
+                return x_coords,y_coords
+    else:
+        return x_coords,y_coords
+
+def rotate_layout(layout_x,layout_y,rotation_deg):
+    # wind_resource: Wind direction in degrees east of north (degrees).
+    # - east is 90 deg, west is 270 deg
+    # in degrees where 0 is north, increasing clockwise
+    # to rotate layout so its facing east - roration deg = 90
+    # suppose original layout is facing north: _^_
+    # rotate east (rotation_deg = 90): |>
+    # rotate west (rotation_deg = 270): <|
+    pass
