@@ -229,3 +229,52 @@ def test_site_solar_resource_input_data_format():
     )
     assert site.solar_resource.data['tz']==-6
 
+def test_different_resource_locations():
+    tmp = copy.deepcopy(flatirons_site)
+    data = {}
+    data.update({'year':2012,'site_boundaries':tmp['site_boundaries']})
+    resource_dict = {
+    "wind_lat": 35.2018863,
+    "wind_lon": -101.945027,
+    "wind_year": 2012,
+    "hub_height": 100,
+    "solar_lat": 39.7555,
+    "solar_lon": 105.2211,
+    "solar_year": 2012,
+    "lat": 34.0,
+    "lon":-100.0,
+    }
+    data.update(resource_dict)
+    site = SiteInfo(data,wind=True,solar=True)
+    assert site.data['elev']==1879
+    assert site.solar_resource.latitude == resource_dict["solar_lat"]
+    assert site.wind_resource.latitude == resource_dict["wind_lat"]
+
+def test_site_shape_for_rectangle():
+    data = copy.deepcopy(flatirons_site)
+    data.pop("site_boundaries")
+    site_details = {"site_shape":"rectangle","site_area_km2":4,"aspect_ratio":2.0}
+    data.update({"site_details":site_details})
+    site = SiteInfo(data,wind=True,solar=True)
+
+def test_site_shape_for_circle():
+    data = copy.deepcopy(flatirons_site)
+    data.pop("site_boundaries")
+    site_details = {"site_shape":"circle","site_area_km2":4}
+    data.update({"site_details":site_details})
+    site = SiteInfo(data,wind=True,solar=True)
+
+def test_site_shape_for_square():
+    data = copy.deepcopy(flatirons_site)
+    data.pop("site_boundaries")
+    site_details = {"site_shape":"square","site_area_km2":4}
+    data.update({"site_details":site_details})
+    site = SiteInfo(data,wind=True,solar=True)
+
+def test_site_shape_for_hexagon():
+    data = copy.deepcopy(flatirons_site)
+    data.pop("site_boundaries")
+    site_details = {"site_shape":"hexagon","site_area_km2":4}
+    data.update({"site_details":site_details})
+    site = SiteInfo(data,wind=True,solar=True)
+    
