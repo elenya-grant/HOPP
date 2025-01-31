@@ -24,7 +24,7 @@ from hopp import ROOT_DIR
 class Floris(BaseClass):
     site: SiteInfo = field()
     config: "WindConfig" = field()
-    verbose: bool = field(default = True)
+    verbose: bool = field(default = False)
 
     _operational_losses: float = field(init=False)
     _timestep: Tuple[int, int] = field(init=False)
@@ -190,7 +190,7 @@ class Floris(BaseClass):
             turbulence_intensities=self.fi.core.flow_field.turbulence_intensities[0]
         )
         vmin = 2.0
-        vmax = np.ceil(max(self.speeds))
+        vmax = 24 #np.ceil(max(self.speeds))
         dv = 2.0 #(vmax-vmin)/10
         wind_rose = time_series.to_WindRose(wd_edges=np.arange(0, 360, 3.0), ws_edges=np.arange(vmin, vmax, dv))
         # fig,ax = plt.subplots(1,1)
