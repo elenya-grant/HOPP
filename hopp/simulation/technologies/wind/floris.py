@@ -190,26 +190,19 @@ class Floris(BaseClass):
             turbulence_intensities=self.fi.core.flow_field.turbulence_intensities[0]
         )
         vmin = 2.0
-        vmax = 24 #np.ceil(max(self.speeds))
-        dv = 2.0 #(vmax-vmin)/10
+        vmax = 24.0
+        dv = 2.0
         wind_rose = time_series.to_WindRose(wd_edges=np.arange(0, 360, 3.0), ws_edges=np.arange(vmin, vmax, dv))
-        # fig,ax = plt.subplots(1,1)
-        # fig,ax1 = plt.subplots(1,2)
         fig, ax = plt.subplots(subplot_kw={"polar": True})
-        # fig = plt.figure()
-        # ax1 = fig.add_subplot(1, 1, 1)
+ 
         hub_ht = int(self.site.wind_resource.hub_height_meters)
         wind_rose.plot(ax=ax,legend_kwargs={"label": f"Wind Speed (m/s) at {hub_ht} m"})
-        # wr1 = ax.figure.axes[0]
-        # wr2 = ax.figure.axes[1]
-        # wr1.set_figure(ax1[0].get_figure())
-        # wr2.set_figure(ax1[1].get_figure())
+        
+        if output_dir is not None:
+            fig_path = os.path.join(output_dir,f"wind_rose_{self.site.wind_resource.latitude}_{self.site.wind_resource.longitude}_{self.site.wind_resource.year}_{hub_ht}m.png")
+            fig.savefig(fig_path)
+            plt.close()
 
-        # ax.set_figure(ax1.get_figure())
-        fig_path = os.path.join(output_dir,f"wind_rose_{self.site.wind_resource.latitude}_{self.site.wind_resource.longitude}_{self.site.wind_resource.year}_{hub_ht}m.png")
-        fig.savefig(fig_path)
-        # fig.savefig(fig_path,bbox_inches="tight")
-        plt.close()
     def execute(self, project_life):
         
         if self.verbose:

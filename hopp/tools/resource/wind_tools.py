@@ -51,9 +51,6 @@ def calculate_elevation_air_density_losses(elevation_m:float):
 
     return loss_percent
 
-def parse_wind_resource_data():
-    pass
-
 def find_most_frequent_wind_direction(wind_resource: Union[HPCWindData,WindResource]):
     wind_resource.data
     pass
