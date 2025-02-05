@@ -8,18 +8,19 @@ import os
 from floris import FlorisModel, TimeSeries
 from floris.core import Core
 from pathlib import Path
-from scipy.constants import R, g, convert_temperature
 from hopp.utilities import load_yaml
 from hopp.simulation.base import BaseClass
 from hopp.simulation.technologies.sites import SiteInfo
-from hopp.type_dec import resource_file_converter
 from hopp.tools.design.wind.turbine_library_interface_tools import set_floris_turbine_specs
 from hopp.tools.resource.wind_tools import calculate_air_density_for_elevation, parse_resource_data
 # avoid circular dep
 if TYPE_CHECKING:
     from hopp.simulation.technologies.wind.wind_plant import WindConfig
 import hopp.tools.design.wind.floris_helper_tools as fi_tools
+from hopp.tools.library import WIND_LIB
 from hopp import ROOT_DIR
+import matplotlib.pyplot as plt
+
 @define
 class Floris(BaseClass):
     site: SiteInfo = field()
@@ -33,9 +34,7 @@ class Floris(BaseClass):
     turbine_name: Union[str,List[str]] = field(init = False)
 
     def __attrs_post_init__(self):
-        # floris_input_file = resource_file_converter(self.config["simulation_input_file"])
-        floris_input_file = self.config.floris_config # DEBUG!!!!!
-
+        
         # 1) check that floris config is provided
         if self.config.floris_config is None:
             raise ValueError("A floris configuration must be provided")
@@ -183,7 +182,7 @@ class Floris(BaseClass):
         return turbine_model
 
     def make_wind_rose(self,output_dir):
-        import matplotlib.pyplot as plt
+        
         time_series = TimeSeries(
             wind_directions=self.wind_dirs[self.start_idx:self.end_idx],
             wind_speeds=self.speeds[self.start_idx:self.end_idx],
@@ -258,14 +257,14 @@ class Floris(BaseClass):
     
     def check_valid_output_dir(self,output_dir):
         if output_dir is None:
-            output_dir = os.path.join(str(ROOT_DIR),"turbine_files")
+            output_dir = str(WIND_LIB)
         if not os.path.isdir(output_dir):
             # check same root path as HOPP ROOT
             machine_root = "/" + "/".join(k for k in ROOT_DIR.parts[:3] if k!="/")
             if machine_root in output_dir:
                 os.makedirs(output_dir)
             else:
-                output_dir = os.path.join(str(ROOT_DIR),"turbine_files")
+                output_dir = str(WIND_LIB)
         if not os.path.isdir(output_dir):
             os.makedirs(output_dir)
         return output_dir
@@ -279,12 +278,17 @@ class Floris(BaseClass):
             if "export_turbine_design" in self.config.turbine_management:
                 if self.config.turbine_management["export_turbine_design"]:
                     turbine_dict = floris_config["farm"]["turbine_type"][0]
-                    fi_tools.write_turbine_to_floris_file(turbine_dict,output_dir)
+                    turbine_design_dir = os.path.join(output_dir,"turbine_designs")
+                    self.check_valid_output_dir(turbine_design_dir)
+
+                    fi_tools.write_turbine_to_floris_file(turbine_dict,turbine_design_dir)
             if "export_layout" in self.config.turbine_management:
                 if self.config.turbine_management["export_layout"]:
+                    layout_dir = os.path.join(output_dir,"wind_farm_layouts")
+                    self.check_valid_output_dir(layout_dir)
                     # turbine_name = floris_config["farm"]["turbine_type"][0]["turbine_type"]
                     fi_tools.write_floris_layout_to_file(
                         floris_config["farm"]["layout_x"],
                         floris_config["farm"]["layout_y"],
-                        output_dir,
+                        layout_dir,
                         self.turbine_name)
