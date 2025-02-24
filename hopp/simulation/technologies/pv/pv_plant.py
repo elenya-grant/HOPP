@@ -20,7 +20,7 @@ class PVConfig(BaseClass):
     Configuration class for PVPlant. 
     
     Args:
-        system_capacity_kw: Design system capacity
+        system_capacity_kw: Design system capacity in kWdc
         use_pvwatts: Whether to use PVWatts (defaults to True). If False, this
             config should be used in a `DetailedPVPlant`
         dc_ac_ratio: Also known as inverter loading ratio; ratio of max DC output of PV to max AC output of inverter,
@@ -261,14 +261,14 @@ class PVPlant(PowerSource):
 
     @property
     def capacity_factor(self) -> float:
-        """System capacity factor [%]"""
+        """System DC capacity factor [%]"""
         if self.system_capacity_kw > 0:
-            return self._system_model.value("capacity_factor")*self._system_model.value("dc_ac_ratio")
+            return self._system_model.value("capacity_factor")
         else:
             return 0
     @property
     def capacity_factor_ac(self) -> float:
-        """System capacity factor [%]"""
+        """System AC capacity factor [%]"""
         if self.system_capacity_kw > 0:
             return self._system_model.value("capacity_factor_ac")
         else:
@@ -284,8 +284,4 @@ class PVPlant(PowerSource):
     def panel_tilt_angle(self):
         """Tilt angle"""
         return self._system_model.SystemDesign.tilt
-        ### Use this version when updated to PySAM 4.2.0
-        # if self.system_capacity_kw > 0:
-        #     return self._system_model.value("capacity_factor_ac")
-        # else:
-        #     return 0
+       
