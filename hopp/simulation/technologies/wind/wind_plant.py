@@ -291,7 +291,7 @@ class WindPlant(PowerSource):
 
         :return:
         """
-        elevation = 0
+        elevation = 0 #TODO: update elevation
         wind_default_max_cp = 0.45
         wind_default_max_tip_speed = 60
         wind_default_max_tip_speed_ratio = 8

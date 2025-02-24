@@ -77,9 +77,7 @@ class WindBoundaryGridParameters(BaseClass):
             Value must be between 0 and 1. Defaults to 0.2
     """
 
-    #TODO: rename to border_spacing_ratio?
     border_spacing: float = field(default=0.0)
-    #TODO: rename to border_offset_ratio?
     border_offset: float = field(default = 0.0, validator = range_val(0.0, 1.0)) 
     border_spacing_m: Optional[float] = field(default = None)
 
@@ -96,18 +94,18 @@ class WindBoundaryGridParameters(BaseClass):
     min_spacing: float = field(init = False) #min spacing in meters
     max_spacing: float = field(init = False) #max spacing in meters
     def __attrs_post_init__(self):
-        """
-        Post-initialization hook for setting up additional attributes.
-        This method initializes the following attributes:
-        - grid_aspect_ratio (float): The aspect ratio of the turbine grid (cols / rows).
-          If `grid_aspect_ratio` is None, it is set to 1 if `grid_aspect_power` is None,
-          otherwise it is set to the exponential of `grid_aspect_power`.
-        - border_spacing (float): The turbine border spacing offset as a ratio of border spacing (0, 1).
-          Defaults to 0.0. Calculated as (border_spacing_m / min_spacing_m) - 1.
-        - min_spacing (float): The minimum spacing between turbines in meters. It takes the maximum of 
-          `min_spacing_m` and `min_spacing_D * rotor_diameter`.
-        - max_spacing (float): The maximum spacing between turbines in meters. It takes the maximum of 
-          `max_spacing_m` and `max_spacing_D * rotor_diameter`.
+        """Post-initialization hook for setting up additional attributes.
+            This method initializes the following attributes:
+        
+            - grid_aspect_ratio (float): The aspect ratio of the turbine grid (cols / rows).
+            If `grid_aspect_ratio` is None, it is set to 1 if `grid_aspect_power` is None,
+            otherwise it is set to the exponential of `grid_aspect_power`.
+            - border_spacing (float): The turbine border spacing offset as a ratio of border spacing (0, 1).
+            Defaults to 0.0. Calculated as (border_spacing_m / min_spacing_m) - 1.
+            - min_spacing (float): The minimum spacing between turbines in meters. It takes the maximum of 
+            `min_spacing_m` and `min_spacing_D * rotor_diameter`.
+            - max_spacing (float): The maximum spacing between turbines in meters. It takes the maximum of 
+            `max_spacing_m` and `max_spacing_D * rotor_diameter`.
         """
         
         if self.grid_aspect_ratio is None:
@@ -197,8 +195,7 @@ class WindLayout(BaseClass):
 
     Args:
         site_polygon (Polygon | BaseGeometry): site polygon shape.
-        _system_model (windpower.Windpower | Floris): pysam wind power object. Not currently 
-            tested to work with floris.
+        _system_model (windpower.Windpower | Floris): PySAM WindPower or HOPP Floris object.
         layout_mode (str): layout choice:  "boundarygrid", "grid", "custom", "basicgrid"
         parameters (
                 Union[
