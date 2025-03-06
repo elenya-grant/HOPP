@@ -2,6 +2,7 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Union, Optional
+import urllib.parse
 import numpy as np
 import csv
 from PySAM.ResourceTools import SAM_CSV_to_solar_data
@@ -12,8 +13,8 @@ from hopp.simulation.technologies.resource.resource import Resource
 from hopp import ROOT_DIR
 
 
-BASE_URL = "https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-2-2-download.csv"
-
+# BASE_URL = "https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-2-2-download.csv"
+BASE_URL = "https://developer.nrel.gov/api/nsrdb/v2/solar/nsrdb-GOES-aggregated-v4-0-0-download.csv?"
 
 class SolarResource(Resource):
     """
@@ -83,11 +84,17 @@ class SolarResource(Resource):
         Returns:
             success (bool): whether API download was successful or not
         """
-        url = '{base}?wkt=POINT({lon}+{lat})&names={year}&leap_day={leap}&interval={interval}&utc={utc}&full_name={name}&email={email}&affiliation={affiliation}&mailing_list={mailing_list}&reason={reason}&api_key={api}&attributes={attr}'.format(
-            base=BASE_URL, year=self.year, lat=self.latitude, lon=self.longitude, leap=self.leap_year, interval=self.interval,
-            utc=self.utc, name=self.name, email=get_developer_nrel_gov_email(),
-            mailing_list=self.mailing_list, affiliation=self.affiliation, reason=self.reason, api=get_developer_nrel_gov_key(),
-            attr=self.solar_attributes)
+        input_data = {
+            "api_key": get_developer_nrel_gov_key(),
+            "email": get_developer_nrel_gov_email(),
+            "names": [str(self.year)],
+            "interval": self.interval,
+            "leap_day": str(self.leap_year),
+            "utc": str(self.utc),
+            "attributes": self.solar_attributes,
+            "wkt": f"POINT({self.longitude} {self.latitude})"
+            }
+        url = BASE_URL + urllib.parse.urlencode(input_data, True)
 
         success = self.call_api(url, filename=self.filename)
 
