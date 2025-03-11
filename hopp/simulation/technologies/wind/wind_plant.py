@@ -109,6 +109,7 @@ class WindConfig(BaseClass):
     name: str = field(default="WindPlant")
     verbose: bool = field(default = True)
     store_turbine_performance_results: bool = field(default = False)
+    store_floris_config_dict: bool = field(default = False)
 
     def __attrs_post_init__(self):
         if self.model_name == 'floris' and self.timestep is None:

@@ -47,6 +47,7 @@ class Floris(BaseClass):
     
     turb_velocities: np.ndarray = field(init = False)
     turb_powers: np.ndarray = field(init = False)
+    floris_config_input: dict = field(init = False)
 
     def __attrs_post_init__(self):
         """Set-up and initialize floris_config and floris model. This method does the following:
@@ -78,14 +79,14 @@ class Floris(BaseClass):
         
         floris_config = self.initialize_from_floris(floris_config)
         
+        if self.config.store_floris_config_dict:
+            self.floris_config_input = floris_config
+
         self.fi = FlorisModel(floris_config)
         self._timestep = self.config.timestep
         self._operational_losses = self.config.operational_losses
         
-        if self.config.resource_parse_method == "average":
-            self.speeds, self.wind_dirs = parse_resource_data(self.site.wind_resource)
-        elif self.config.resource_parse_method == "weighted_average":
-            self.speeds, self.wind_dirs = weighted_parse_resource_data(self.site.wind_resource)
+        
         self.system_capacity = self.nTurbs * self.turb_rating
 
         # time to simulate
@@ -228,6 +229,11 @@ class Floris(BaseClass):
         if self.config.verbose:
             print('Simulating wind farm output in FLORIS...')
 
+        if self.config.resource_parse_method == "average":
+            self.speeds, self.wind_dirs = parse_resource_data(self.site.wind_resource)
+        elif self.config.resource_parse_method == "weighted_average":
+            self.speeds, self.wind_dirs = weighted_parse_resource_data(self.site.wind_resource)
+            
         # check if user-input num_turbines equals number of turbines in layout
         if self.nTurbs != self.config.num_turbines:
             # log warning if discrepancy in number of turbines
