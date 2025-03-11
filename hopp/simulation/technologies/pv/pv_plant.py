@@ -131,7 +131,7 @@ class PVPlant(PowerSource):
         super().__init__("PVPlant", self.site, system_model, financial_model)
 
         if self.site.solar_resource is not None:
-            self._system_model.SolarResource.solar_resource_data = self.site.solar_resource.data
+            self._system_model.value("solar_resource_data",self.site.solar_resource.data)
 
         self.dc_ac_ratio = self.config.dc_ac_ratio
         self.inv_eff = self.config.inv_eff
@@ -174,36 +174,36 @@ class PVPlant(PowerSource):
     def system_capacity_kw(self) -> float:
         """Gets the system capacity."""
         # TODO: This is currently DC power; however, all other systems are rated by AC power
-        return self._system_model.SystemDesign.system_capacity #kWdc
+        return self._system_model.value("system_capacity") #kWdc
 
     @system_capacity_kw.setter
     def system_capacity_kw(self, size_kw: float):
         """
         Sets the system capacity and updates the system, cost and financial model.
         """
-        self._system_model.SystemDesign.system_capacity = size_kw
+        self._system_model.value("system_capacity",size_kw)
         self._financial_model.value('system_capacity', size_kw) # needed for custom financial models
         self.layout.set_system_capacity(size_kw)
     
     @property
     def dc_degradation(self) -> float:
         """Annual DC degradation for lifetime simulations [%/year]."""
-        return self._system_model.Lifetime.dc_degradation
+        return self._system_model.value("dc_degradation")
 
     @dc_degradation.setter
     def dc_degradation(self, dc_deg_per_year: Sequence):
         """Sets annual DC degradation for lifetime simulations [%/year]."""
-        self._system_model.Lifetime.dc_degradation = dc_deg_per_year
+        self._system_model.value("dc_degradation",dc_deg_per_year)
 
     @property
     def dc_ac_ratio(self) -> float:
         """DC to AC inverter loading ratio [ratio]."""
-        return self._system_model.SystemDesign.dc_ac_ratio
+        return self._system_model.value("dc_ac_ratio")
 
     @dc_ac_ratio.setter
     def dc_ac_ratio(self, inverter_loading_ratio: float):
         """Sets DC to AC inverter loading ratio [ratio]."""
-        self._system_model.SystemDesign.dc_ac_ratio = inverter_loading_ratio
+        self._system_model.value("dc_ac_ratio",inverter_loading_ratio)
     
     @property
     def inv_eff(self) -> float:
@@ -218,12 +218,12 @@ class PVPlant(PowerSource):
     @property
     def losses(self) -> float:
         """DC power losses [percent]."""
-        return self._system_model.SystemDesign.losses
+        return self._system_model.value("losses")
 
     @losses.setter
     def losses(self, dc_losses: float):
         """Sets DC power losses [percent]."""
-        self._system_model.SystemDesign.losses = dc_losses
+        self._system_model.value("losses", dc_losses)
     
     @property
     def module_type(self) -> int:
@@ -283,7 +283,7 @@ class PVPlant(PowerSource):
     @property
     def panel_tilt_angle(self):
         """Tilt angle"""
-        return self._system_model.SystemDesign.tilt
+        return self._system_model.value("tilt")
         ### Use this version when updated to PySAM 4.2.0
         # if self.system_capacity_kw > 0:
         #     return self._system_model.value("capacity_factor_ac")
