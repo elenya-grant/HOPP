@@ -772,3 +772,23 @@ class PowerSource(BaseClass):
              linewidth=4.0
              ):
         self._layout.plot(figure, axes, color, site_border_color, site_alpha, linewidth)
+
+    def export_as_generic_system(self):
+        if self.name == "PVPlant":
+            generic = {
+                "system_capacity_kw":float(self.system_capacity_kw),
+                "system_capacity_kwac":float(self.system_capacity_kw/self.dc_ac_ratio),
+                "generation_profile_kw":np.array(self._system_model.value("gen")).tolist(),
+            }
+        else:
+            generic = {
+                "system_capacity_kw":float(self.system_capacity_kw),
+                "system_capacity_kwac":float(self.system_capacity_kw),
+                "generation_profile_kw":np.array(self._system_model.value("gen")).tolist(),
+            }
+        
+        subsytem_name = "_".join(i for i in self.name.lower().split("plant"))
+        generic.update({"subsystem_name":subsytem_name})
+
+
+        return generic
