@@ -3,6 +3,13 @@ import numpy as np
 import csv, os, re, copy
 from PySAM.ResourceTools import SRW_to_wind_data
 
+def extract_site_specs_from_file(wind_filepath):
+    info_parts = ['site_gid','city','state','country','year','latitude','elevation']
+    header = pd.read_csv(wind_filepath, nrows=1, header=None).values[0].tolist()[:len(info_parts)]
+    # nonmissing_parts = [part for part,val in zip(info_parts,header) if '??' not in val or 'Not Available' not in val]
+    
+    return dict(zip(info_parts,header))
+
 def csv_to_dataframe(wind_csv_filepath, resource_height, resource_year):
     """Converts csv file of wind resource data to dataframe. This function is a slightly modified version of the function in 
     ``PySAM.ResourceTools.FetchResourceFiles._csv_to_srw``. 
@@ -104,6 +111,19 @@ def csv_to_dataframe(wind_csv_filepath, resource_height, resource_year):
     out = pd.concat([header, df], axis='rows')
     out.reset_index(drop=True, inplace=True)
     return out
+
+def dataframe_to_wind_data(df:pd.DataFrame):
+    data_to_field_number = {'temperature': 1, 'pressure': 2, 'speed': 3, 'direction': 4, 'precipitation_rate': 5}
+    heights = [h for h in df.iloc[4].to_list() if h is not None]
+    field_names = [h for h in df.iloc[2].to_list() if h is not None]
+    field_numbers = [data_to_field_number[f] for f in field_names]
+    data = df.loc[5:].dropna(axis=1)
+    formatted_data = [d.tolist() for d in data.values]
+    wind_resource_data = {
+        'heights':heights,
+        'fields':field_numbers,
+        'data':formatted_data}
+    return wind_resource_data
 
 def csv_to_srw(wind_csv_filepath, resource_height, resource_year = None, data_source = "WTK_LED"):
     """Write wind resource data to .srw file from input .csv file.  
@@ -298,6 +318,9 @@ def combine_wind_files(wind_resource_filepath,resource_heights):
     Returns:
         dict: wind resource data dictionary of combined resource data
     """
+    if resource_heights is None:
+        resource_heights = pd.read_csv(wind_resource_filepath,skiprows=3,nrows=1).values[0].tolist()
+        resource_heights = list(set(resource_heights))
     resource_heights = [int(h) for h in resource_heights]
     
     if isinstance(wind_resource_filepath,list):
