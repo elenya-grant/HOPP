@@ -2,14 +2,32 @@ import pandas as pd
 import numpy as np
 import csv, os, re, copy
 from PySAM.ResourceTools import SRW_to_wind_data
+from pathlib import Path
 
 def extract_site_specs_from_file(wind_filepath):
-    info_parts = ['site_gid','city','state','country','year','latitude','elevation']
+    info_parts = ['site_gid','city','state','country','year','latitude','longitude','elevation']
     header = pd.read_csv(wind_filepath, nrows=1, header=None).values[0].tolist()[:len(info_parts)]
     # nonmissing_parts = [part for part,val in zip(info_parts,header) if '??' not in val or 'Not Available' not in val]
     
     return dict(zip(info_parts,header))
 
+def multiheight_csv_to_dataframe(wind_csv_filepath):
+    data_to_field_number = {'temperature': 1, 'pressure': 2, 'speed': 3, 'direction': 4, 'precipitation_rate': 5}
+
+    df = pd.read_csv(wind_csv_filepath, header=1)
+    df['datetime'] = pd.to_datetime(
+        df[['Year', 'Month', 'Day', 'Hour', 'Minute']])
+    df.set_index('datetime', inplace=True)
+    df = df.resample('h').first()
+
+    # --- drop leap days ---
+    df = df.loc[~((df.index.month == 2) & (df.index.day == 29))]
+    old_colnames = [c for c in df.columns.to_list() if "(" in c]
+    new_colnames = [c.split("(")[0].lower() + "(" + c.split("(")[1] for c in old_colnames]
+    df = df.rename(columns = dict(zip(old_colnames,new_colnames)))
+
+
+    pass
 def csv_to_dataframe(wind_csv_filepath, resource_height, resource_year):
     """Converts csv file of wind resource data to dataframe. This function is a slightly modified version of the function in 
     ``PySAM.ResourceTools.FetchResourceFiles._csv_to_srw``. 
@@ -331,9 +349,10 @@ def combine_wind_files(wind_resource_filepath,resource_heights):
                 f"entries but ``resource_heights`` has {len(resource_heights)} entries."
                 )
             raise ValueError(msg)
+        wind_resource_filepath = [str(f) for f in wind_resource_filepath]
         file_resource_heights = dict(zip(resource_heights,wind_resource_filepath))
-    elif isinstance(wind_resource_filepath, str):
-        filepaths = [wind_resource_filepath]*len(resource_heights)
+    elif isinstance(wind_resource_filepath, (str,Path)):
+        filepaths = [str(wind_resource_filepath)]*len(resource_heights)
         file_resource_heights = dict(zip(resource_heights,filepaths))
     
     is_srw = any(f.split(".")[-1]=="srw" for f in file_resource_heights.values())

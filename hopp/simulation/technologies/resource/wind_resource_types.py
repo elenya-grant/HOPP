@@ -2,6 +2,8 @@ from hopp.simulation.technologies.resource.wind_base import WindResourceBase
 from hopp.utilities.keys import get_developer_nrel_gov_key, get_developer_nrel_gov_email
 from hopp.tools.resource.pysam_wind_tools import combine_and_write_srw_files
 from typing import Union, Optional
+from rex import WindX
+
 #https://github.com/NREL/HPC/blob/master/general/datasets/WIND/wtk_led_data.ipynb
 
 class WTKSRW(WindResourceBase):
@@ -26,7 +28,7 @@ class WTKSRW(WindResourceBase):
 
         for height in self.data_hub_heights:
             filepath = self.make_default_filename(file_desc = f'{int(height)}m', file_type = 'srw')
-            url = self.make_url()
+            url = self.make_url(height)
             success = self.call_api(url, filename=filepath)
             file_resource_heights.update({int(height):filepath})
         
@@ -100,7 +102,6 @@ class WTKLEDConus(WindResourceBase):
                 self.data_lat = f.meta['latitude'].iloc[site_gid]
                 self.data_lon = f.meta['longitude'].iloc[site_gid]
 
-
                 # instantiate temp dictionary to hold each attributes dataset
                 # loop through hub heights to download, capture datasets
                 # NOTE: datasets are not auto shifted by timezone offset 
@@ -114,39 +115,15 @@ class WTKLEDConus(WindResourceBase):
                 wind_dict[f'direction_{height}m'] = f['winddirection_{height}m', :, site_gid]
         return wind_dict
 
-# class NOWCalifornia5Min(WindResourceBase):
-#     #NOTE: This 
+# class Template(WindResourceBase):
 #     _allowed_hub_height_meters: list[int] = [10,40,60,80,100,120,140,160,180,200]
 #     _year_range: tuple[int] = (2000,2020)
-#     _source_desc: str = 'NOW_California5min'
-#     _url_base: str = 'https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-now23-california-v1-0-0-5min-download.csv?'
-
-#     def check_resource_params(self):
-#         self.n_timesteps = (60/5)*8760
-#         self.api_params.update({'interval':'5'})
-    # _api_attributes: list[str] = []
-    # _dataset_base_path: str = ''
-
-# class NOWCalifornia(WindResourceBase):
-#     #NOTE: This 
-#     _allowed_hub_height_meters: list[int] = [10,40,60,80,100,120,140,160,180,200]
-#     _year_range: tuple[int] = (2000,2020)
-#     _source_desc: str = 'NOW_California'
-#     _url_base: str = 'https://developer.nrel.gov/api/wind-toolkit/v2/wind/offshore-ca-download.csv?'
-    # _api_attributes: list[str] = []
-    # _dataset_base_path: str = ''
-
-class Template(WindResourceBase):
-    _allowed_hub_height_meters: list[int] = [10,40,60,80,100,120,140,160,180,200]
-    _year_range: tuple[int] = (2000,2020)
-    _source_desc: str = '{file_output_id}'
-    _url_base: str = 'https://developer.nrel.gov/api/wind-toolkit/v2/wind/{url_name}.csv?'
-    # _api_attributes: list[str] = []
-    # _dataset_base_path: str = ''
-    def get_dataset_filename(self):
-        return f'filename_from_Dataset.h5'
-
-
+#     _source_desc: str = '{file_output_id}'
+#     _url_base: str = 'https://developer.nrel.gov/api/wind-toolkit/v2/wind/{url_name}.csv?'
+#     # _api_attributes: list[str] = []
+#     # _dataset_base_path: str = ''
+#     def get_dataset_filename(self):
+#         return f'filename_from_Dataset.h5'
 
 class NOW23(WindResourceBase):
     _allowed_hub_height_meters: list[int] = [10,40,60,80,100,120,140,160,180,200]

@@ -73,8 +73,17 @@ class WindResourceBase(Resource):
             self.user_provided_data(resource_data)
             return 
         
-        if self.filename is not None and not self.use_api:
+        if str(self.filename)!='' and not self.use_api:
             self.user_provided_filepath(self.filename)
+        
+        if str(self.filename)=='':
+            height_desc = "_".join(f"{h}m" for h in self.data_hub_heights)
+            self.filename = self.make_default_filename(file_desc=height_desc)
+
+        # check if theres an existing file
+        if any(os.path.isfile(f"{str(self.filename).replace(Path(self.filename).suffix,ext)}") for ext in [".csv",".srw"]) and not self.use_api:
+            filename = [f"{str(self.filename).replace(Path(self.filename).suffix,ext)}" for ext in ['.csv','.srw'] if os.path.isfile(f"{str(self.filename).replace(Path(self.filename).suffix,ext)}")][0]
+            self.user_provided_filepath(filename)
 
         if 'heights' not in self._data and self.pull_on_init:
             self.pull_resource()
@@ -111,8 +120,8 @@ class WindResourceBase(Resource):
             if resource_data_filepath.suffix == '.srw' or resource_data_filepath.suffix == '.csv':
                 site_specs = extract_site_specs_from_file(resource_data_filepath)
                 self.site_gid = site_specs['site_gid']
-                self.data_lat = site_specs['data_lat']
-                self.data_lon = site_specs['data_lon']
+                self.data_lat = site_specs['latitude']
+                self.data_lon = site_specs['longitude']
                 self.year = site_specs['year']
 
                 resource_heights = pd.read_csv(resource_data_filepath,skiprows=3,nrows=1).values[0].tolist()
@@ -148,7 +157,7 @@ class WindResourceBase(Resource):
         heights_lower = [hh for hh in self._allowed_hub_height_meters if hh/self.hub_height_meters<1]
         heights_upper = [hh for hh in self._allowed_hub_height_meters if hh/self.hub_height_meters>1]
         height_low = max(heights_lower) if len(heights_lower)>0 else min(self._allowed_hub_height_meters)
-        height_high = min(heights_lower) if len(heights_upper)>0 else max(self._allowed_hub_height_meters)
+        height_high = min(heights_upper) if len(heights_upper)>0 else max(self._allowed_hub_height_meters)
         return [height_low,height_high]
     
     # def update_height(self, hub_height_meters):
@@ -189,14 +198,7 @@ class WindResourceBase(Resource):
             input_data.update({'api_key':get_developer_nrel_gov_key()})
         if 'email' not in input_data:
             input_data.update({'email':get_developer_nrel_gov_email()})
-        # input_data = {
-        #     'attributes': attributes_str,
-        #     'interval': str(self.api_params['interval']),
-        #     'api_key': get_developer_nrel_gov_key(),
-        #     'email': get_developer_nrel_gov_email(),
-        #     'names': [str(self.year)],
-        #     'wkt': f"POINT({self.longitude} {self.latitude})"
-        # }
+        
         url = self._url_base + urllib.parse.urlencode(input_data, True)
         return url
 
@@ -214,6 +216,7 @@ class WindResourceBase(Resource):
         success = False
 
         url = self.make_url()
+        
         success = self.call_api(url, filename=self.filename)
        
         if not success:
@@ -366,6 +369,7 @@ class WindResourceBase(Resource):
     def resample_data(self,method='average'):
         
         pass
+
     @Resource.data.setter
     def data(self, data_info:dict):
         """
@@ -374,14 +378,13 @@ class WindResourceBase(Resource):
         if isinstance(data_info,dict):
             self._data = data_info
             return
-        # if isinstance(data_info,(str,Path)):
-        #     if '.srw' in data_info:
-        #         self._data = SRW_to_wind_data(data_info)
-        #         return
-        #     if '.csv' in data_info:
-        #         resource_heights = self.calculate_bounding_heights_from_allowed()
-        #         self._data = combine_wind_files(str(data_info),resource_heights)
-        #         return
+        if isinstance(data_info,(str,Path)):
+            if '.srw' in data_info:
+                self._data = SRW_to_wind_data(data_info)
+                return
+            if '.csv' in data_info:
+                self._data = combine_wind_files(str(data_info),self.data_hub_heights)
+                return
     @property
     def hub_height_meters(self):
         #NOTE: this only exists to prevent breaking code in pysam_wind_tools
@@ -393,10 +396,10 @@ class WindResourceBase(Resource):
         self.data_hub_heights = self.calculate_bounding_heights_from_allowed()
        
 
-if __name__ == "__main__":
-    fpath = '/Users/egrant/Documents/projects/HOPP/hopp/simulation/resource_files/wind/42.2318_-83.9365_windtoolkit_2007_60min_60m.srw'
-    wind_data = SRW_to_wind_data(fpath)
-    p = WindResourceBase(90,50.0,50.0,1999,resource_data = wind_data,use_api = False,pull_on_init = False)
+# if __name__ == "__main__":
+#     fpath = '/Users/egrant/Documents/projects/HOPP/hopp/simulation/resource_files/wind/42.2318_-83.9365_windtoolkit_2007_60min_60m.srw'
+#     wind_data = SRW_to_wind_data(fpath)
+#     p = WindResourceBase(90,50.0,50.0,1999,resource_data = wind_data,use_api = False,pull_on_init = False)
     # ,path_resource = ROOT_DIR/"elenya")
     # w = WindResourceBase(lat = 50, lon = 10, year = 1999, hub_height_meters=90)
     # class_attr_names = [a.name for a in w.__attrs_attrs__]
