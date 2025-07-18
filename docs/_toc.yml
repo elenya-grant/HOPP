@@ -35,6 +35,7 @@ parts:
     - file: api/technology/grid
     - file: api/technology/mhk_wave_plant
     - file: api/technology/mhk_tidal_plant
+    - file: api/technology/generic_plant
   - file: api/dispatch/index
     sections:
     - file: api/dispatch/storage/index

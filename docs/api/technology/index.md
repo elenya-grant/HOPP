@@ -14,6 +14,7 @@ These are the primary technologies that may be configured for a standard HOPP si
 - [Grid](tech:grid)
 - [Wave Plant](tech:wave)
 - [Tidal Plant](tech:tidal)
+- [Generic Plant](tech:generic)
 
 (tech:power-source)=
 ## Power Source Base Class
