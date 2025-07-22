@@ -26,12 +26,12 @@ class WindResource():
         wind_lon: float,
         wind_year: int,
         dataset_name: str = 'windtoolkit',
-        wind_resource_obj: object = None,
+        wind_resource_obj: Union[object,dict,None] = None,
         **kwargs,
     ):
 
-        if wind_resource_obj is None:
-            dataset_name = dataset_name.strip()
+        dataset_name = dataset_name.strip()
+        if wind_resource_obj is None or isinstance(wind_resource_obj,dict):
             if dataset_name not in self._valid_datasets:
                 msg = (
                     f"{dataset_name} is not a valid wind resource dataset. "
@@ -39,20 +39,24 @@ class WindResource():
                     )
                 raise ValueError(msg)
             dataset = self._dataset_options[dataset_name]
-            if dataset is NOW23 and 'offshore_region' not in kwargs:
-                msg = (
-                    f'To use {dataset_name} dataset, please specify the offshore_region. ',
-                    f'Offshore regions are: {self._offshore_regions}'
-                )
-                raise ValueError(msg)
+
+            if wind_resource_obj is None:
+                if dataset is NOW23 and 'offshore_region' not in kwargs:
+                    msg = (
+                        f'To use {dataset_name} dataset, please specify the offshore_region. ',
+                        f'Offshore regions are: {self._offshore_regions}'
+                    )
+                    raise ValueError(msg)
             
+            kwargs.update({"resource_data":wind_resource_obj})
             self.wind_resource = dataset(hub_height,wind_lat,wind_lon,wind_year,**kwargs)
 
             return
-        if any(v is wind_resource_obj for k,v in self._dataset_options.items()):
+        # if any(v is wind_resource_obj for k,v in self._dataset_options.items()):
+        if any(isinstance(wind_resource_obj,v) for k,v in self._dataset_options.items()):
             self.wind_resource = wind_resource_obj
             return
-        
+
         msg = (
             "User input wind_resource_obj is not a valid wind resource datatype"
             )
@@ -66,7 +70,19 @@ class WindResource():
     def _data(self):
         return self.wind_resource._data
 
-
+    def value(self, name: str, set_value=None):
+        """Set or retrieve attribute of `hopp.simulation.technologies.wind.floris.Floris`.
+            if set_value = None, then retrieve value; otherwise overwrite variable's value.
+        
+        Args:
+            name (str): name of attribute to set or retrieve.
+            set_value (Optional): value to set for variable `name`. 
+                If `None`, then retrieve value. Defaults to None.
+        """
+        if set_value is not None:
+            self.wind_resource.__setattr__(name, set_value)
+        else:
+            return self.wind_resource.__getattribute__(name)
 
 # if __name__ == "__main__":
 #     lat = 35.2018863

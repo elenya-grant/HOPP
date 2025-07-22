@@ -4,12 +4,39 @@ import csv, os, re, copy
 from PySAM.ResourceTools import SRW_to_wind_data
 from pathlib import Path
 
-def extract_site_specs_from_file(wind_filepath):
-    info_parts = ['site_gid','city','state','country','year','latitude','longitude','elevation']
-    header = pd.read_csv(wind_filepath, nrows=1, header=None).values[0].tolist()[:len(info_parts)]
-    # nonmissing_parts = [part for part,val in zip(info_parts,header) if '??' not in val or 'Not Available' not in val]
+def get_heights_from_file(wind_resource_filepath):
+    # below is for srw data
+    header_info = pd.read_csv(wind_resource_filepath,skiprows=3,nrows=1)
+    # if not any("speed" in c for c in header_info.columns.to_list()):
+    if Path(wind_resource_filepath).suffix == ".srw":
+        resource_heights = header_info.values[0].tolist()
+        resource_heights = list(set(resource_heights))
+        resource_heights = [int(h) for h in resource_heights]
+        return resource_heights
     
-    return dict(zip(info_parts,header))
+    # below is for AK wind data
+    header_cols = pd.read_csv(wind_resource_filepath,skiprows=1).columns.to_list()
+    if any("speed" in c.lower() for c in header_cols):
+        ws_cols = [int(c.split("at")[-1].split("m")[0].strip()) for c in header_cols if "speed" in c.lower()]
+        return ws_cols
+    
+    raise NotImplementedError("method to handle this file isnt implemented")
+
+def extract_site_specs_from_file(wind_filepath):
+    if Path(wind_filepath).suffix == ".srw":
+        info_parts = ['siteid','city','state','country','year','latitude','longitude','elevation']
+        header = pd.read_csv(wind_filepath, nrows=1, header=None).values[0].tolist()[:len(info_parts)]
+        site_specs =  dict(zip(info_parts,header))
+
+    # nonmissing_parts = [part for part,val in zip(info_parts,header) if '??' not in val or 'Not Available' not in val]
+    else:
+        # this works for AK wind data
+        header_data = pd.read_csv(wind_filepath, nrows=1, header=None).values.flatten().tolist()
+        resource_data = pd.read_csv(wind_filepath, nrows=1, header=1,usecols=["Year"]).values.flatten().tolist()
+        
+        site_specs = {header_data[ki].lower().replace(" ","_"):header_data[vi] for ki,vi in zip(range(0,len(header_data),2),range(1,len(header_data),2))}
+        site_specs.update({"year":resource_data[0]})
+    return site_specs
 
 def multiheight_csv_to_dataframe(wind_csv_filepath):
     data_to_field_number = {'temperature': 1, 'pressure': 2, 'speed': 3, 'direction': 4, 'precipitation_rate': 5}
@@ -25,7 +52,7 @@ def multiheight_csv_to_dataframe(wind_csv_filepath):
     old_colnames = [c for c in df.columns.to_list() if "(" in c]
     new_colnames = [c.split("(")[0].lower() + "(" + c.split("(")[1] for c in old_colnames]
     df = df.rename(columns = dict(zip(old_colnames,new_colnames)))
-
+    
 
     pass
 def csv_to_dataframe(wind_csv_filepath, resource_height, resource_year):
@@ -336,10 +363,13 @@ def combine_wind_files(wind_resource_filepath,resource_heights):
     Returns:
         dict: wind resource data dictionary of combined resource data
     """
+    # if resource_heights is None:
+    #     # below works for srw data
+    #     resource_heights = pd.read_csv(wind_resource_filepath,skiprows=3,nrows=1).values[0].tolist()
     if resource_heights is None:
-        resource_heights = pd.read_csv(wind_resource_filepath,skiprows=3,nrows=1).values[0].tolist()
+        resource_heights = get_heights_from_file(wind_resource_filepath)
         resource_heights = list(set(resource_heights))
-    resource_heights = [int(h) for h in resource_heights]
+        resource_heights = [int(h) for h in resource_heights]
     
     if isinstance(wind_resource_filepath,list):
         if len(wind_resource_filepath) != len(resource_heights):

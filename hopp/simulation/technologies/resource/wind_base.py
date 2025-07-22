@@ -119,15 +119,12 @@ class WindResourceBase(Resource):
 
             if resource_data_filepath.suffix == '.srw' or resource_data_filepath.suffix == '.csv':
                 site_specs = extract_site_specs_from_file(resource_data_filepath)
-                self.site_gid = site_specs['site_gid']
+                self.site_gid = site_specs['siteid']
                 self.data_lat = site_specs['latitude']
                 self.data_lon = site_specs['longitude']
                 self.year = site_specs['year']
 
-                resource_heights = pd.read_csv(resource_data_filepath,skiprows=3,nrows=1).values[0].tolist()
-                resource_heights = list(set(resource_heights))
-
-                data = combine_wind_files(resource_data_filepath,resource_heights)
+                data = combine_wind_files(resource_data_filepath,resource_heights = None)
 
                 self.data_hub_heights = list(set(data['heights']))
                 self.data = data

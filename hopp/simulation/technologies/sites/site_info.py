@@ -19,10 +19,10 @@ from hopp.simulation.technologies.resource import (
     WaveResource,
     TidalResource,
     ElectricityPrices,
-    HPCWindData,
+    # HPCWindData,
     HPCSolarData,
-    AlaskaWindData,
-    BCHRRRWindData,
+    # AlaskaWindData,
+    # BCHRRRWindData,
 )
 from hopp.tools.layout.plot_tools import plot_shape
 from hopp.utilities.log import hybrid_logger as logger
@@ -136,9 +136,15 @@ class SiteInfo(BaseClass):
     wave: bool = field(default=False)
     tidal: bool = field(default=False)
     renewable_resource_origin: str = field(default="API", validator=contains(["API", "HPC"]))
-    wind_resource_origin: str = field(default="WTK", validator=contains(["WTK", "TAP", "BC-HRRR"]))
-    wind_resource_region: str = field(default="conus", validator=contains(["conus", "ak"]), converter=(str.strip, str.lower))
-
+    # wind_resource_origin: str = field(default="WTK", validator=contains(["WTK", "TAP", "BC-HRRR"]))
+    # wind_resource_region: str = field(default="conus", validator=contains(["conus", "ak"]), converter=(str.strip, str.lower))
+    wind_resource_dataset: str = field(
+        default='windtoolkit',
+        validator = contains(['windtoolkit','BC_HRRR','WTK_LED_Alaska','WTK_LED_CONUS','offshore','NOW23']),
+        converter = (str.strip)
+        )
+    wind_resource_options: dict = field(default = {})
+    api_params: dict = field(default = {})
     site_buffer: Optional[float] = field(default = 1e-8)
 
     # Set in post init hook
@@ -150,7 +156,7 @@ class SiteInfo(BaseClass):
     vertices: NDArrayFloat = field(init=False)
     polygon: Union[Polygon, BaseGeometry] = field(init=False)
     solar_resource: Optional[Union[SolarResource,HPCSolarData]] = field(default=None)
-    wind_resource: Optional[Union[WindResource,HPCWindData,AlaskaWindData,BCHRRRWindData]] = field(default=None)
+    wind_resource: Optional[Union[WindResource,object]] = field(default=None)
     wave_resource: Optional[WaveResource] = field(init=False, default=None)
     tidal_resource: Optional[TidalResource] = field(init=False, default=None)
     elec_prices: Optional[ElectricityPrices] = field(init=False, default=None)
@@ -384,47 +390,55 @@ class SiteInfo(BaseClass):
         wind_year = data.setdefault("wind_year", data["year"])
         
         # If wind resource is already provided as an object, return it directly
-        if self.wind_resource is not None and not isinstance(self.wind_resource, dict):
+        # if self.wind_resource is not None and not isinstance(self.wind_resource, dict):
+        #     return self.wind_resource
+        if isinstance(self.wind_resource,WindResource):
             return self.wind_resource
+            # any(isinstance(data,wind_type) for wind_dataset,wind_type in wman._dataset_options.items())
+
+        wind_kwargs = self.wind_resource_options
+        wind_kwargs.update(self.api_params)
+
+        wind_resource_data = WindResource(self.hub_height,wind_lat,wind_lon,wind_year,self.wind_resource_dataset,wind_resource_obj = self.wind_resource,**wind_kwargs)
+        return wind_resource_data
+        # # If wind resource is provided as a dictionary, convert to appropriate object
+        # if isinstance(self.wind_resource, dict):
+        #     if self.wind_resource_region == "conus":
+        #         return WindResource(wind_lat, wind_lon, wind_year, 
+        #                            wind_turbine_hub_ht=self.hub_height, 
+        #                            resource_data=self.wind_resource)
+        #     elif self.wind_resource_region == "ak":
+        #         return AlaskaWindData(lat=wind_lat, lon=wind_lon, year=wind_year, 
+        #                              hub_height_meters=self.hub_height, 
+        #                              resource_data=self.wind_resource)
         
-        # If wind resource is provided as a dictionary, convert to appropriate object
-        if isinstance(self.wind_resource, dict):
-            if self.wind_resource_region == "conus":
-                return WindResource(wind_lat, wind_lon, wind_year, 
-                                   wind_turbine_hub_ht=self.hub_height, 
-                                   resource_data=self.wind_resource)
-            elif self.wind_resource_region == "ak":
-                return AlaskaWindData(lat=wind_lat, lon=wind_lon, year=wind_year, 
-                                     hub_height_meters=self.hub_height, 
-                                     resource_data=self.wind_resource)
+        # # Create new wind resource based on region and resource origin
+        # if self.wind_resource_region == "ak":
+        #     return AlaskaWindData(lat=wind_lat, lon=wind_lon, year=wind_year, 
+        #                          hub_height_meters=self.hub_height,
+        #                          path_resource=self.path_resource, 
+        #                          filepath=self.wind_resource_file)
         
-        # Create new wind resource based on region and resource origin
-        if self.wind_resource_region == "ak":
-            return AlaskaWindData(lat=wind_lat, lon=wind_lon, year=wind_year, 
-                                 hub_height_meters=self.hub_height,
-                                 path_resource=self.path_resource, 
-                                 filename=self.wind_resource_file)
-        
-        # Handle Continental US (conus) region
-        if self.renewable_resource_origin == "API":
-            if self.wind_resource_origin in ["WTK", "TAP"]:
-                return WindResource(wind_lat, wind_lon, wind_year, 
-                                   wind_turbine_hub_ht=self.hub_height,
-                                   path_resource=self.path_resource, 
-                                   filepath=self.wind_resource_file, 
-                                   source=self.wind_resource_origin)
-            elif self.wind_resource_origin == "BC-HRRR":
-                return BCHRRRWindData(wind_lat, wind_lon, wind_year, 
-                                     hub_height_meters=self.hub_height,
-                                     path_resource=self.path_resource, 
-                                     filename=self.wind_resource_file)
-            else:
-                raise ValueError("Invalid entry for `wind_resource_origin`, must be either 'WTK', 'TAP' or 'BC-HRRR'")
-        elif self.renewable_resource_origin == "HPC":
-            return HPCWindData(wind_lat, wind_lon, wind_year, 
-                              wind_turbine_hub_ht=self.hub_height,
-                              wtk_source_path=self.wtk_source_path, 
-                              filepath=self.wind_resource_file)
+        # # Handle Continental US (conus) region
+        # if self.renewable_resource_origin == "API":
+        #     if self.wind_resource_origin in ["WTK", "TAP"]:
+        #         return WindResource(wind_lat, wind_lon, wind_year, 
+        #                            wind_turbine_hub_ht=self.hub_height,
+        #                            path_resource=self.path_resource, 
+        #                            filepath=self.wind_resource_file, 
+        #                            source=self.wind_resource_origin)
+        #     elif self.wind_resource_origin == "BC-HRRR":
+        #         return BCHRRRWindData(wind_lat, wind_lon, wind_year, 
+        #                              hub_height_meters=self.hub_height,
+        #                              path_resource=self.path_resource, 
+        #                              filename=self.wind_resource_file)
+        #     else:
+        #         raise ValueError("Invalid entry for `wind_resource_origin`, must be either 'WTK', 'TAP' or 'BC-HRRR'")
+        # elif self.renewable_resource_origin == "HPC":
+        #     return HPCWindData(wind_lat, wind_lon, wind_year, 
+        #                       wind_turbine_hub_ht=self.hub_height,
+        #                       wtk_source_path=self.wtk_source_path, 
+        #                       filepath=self.wind_resource_file)
 
     # TODO: determine if the below functions are obsolete
     @property
