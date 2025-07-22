@@ -22,7 +22,8 @@ class APIParameters(FromDictMixin):
     affiliation: Optional[str] = field(default = 'NREL')
     reason: Optional[str] = field(default = 'hybrid-analysis')
     # mailing_list: Optional[str] = field(default = 'true')
-    
+    api_key: Optional[str] = field(default=None)
+    email: Optional[str] = field(default=None)
     # def __attrs_post_init__(self):
     #     if isinstance(self.leap_year,bool):
     #     if isinstance(self.utc,bool):
@@ -30,7 +31,8 @@ class APIParameters(FromDictMixin):
     def get_api_params(self,api_params = {}):
         d = self.as_dict()
         for k,v in d.items():
-            api_params.setdefault(k,str(v))
+            if v is not None:
+                api_params.setdefault(k,str(v))
         return api_params
 
 class Resource(metaclass=ABCMeta):
